@@ -1,7 +1,5 @@
 # Issue tracker: GitHub
 
-> **Note:** this repo has no git remote yet. Until it's created on GitHub and pushed (`git init`, `gh repo create`, push), `gh` commands will fail — skills should surface that rather than silently falling back.
-
 Issues and specs for this repo live as GitHub issues. Use the `gh` CLI for all operations.
 
 ## Conventions
