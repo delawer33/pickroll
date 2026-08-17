@@ -1,0 +1,74 @@
+personId,firstName,lastName,birthDate,school,country,heightInches,bodyWeightLbs,jersey,guard,forward,center,dleagueFlag,nbaFlag,gamesPlayedFlag,draftYear,draftRound,draftNumber,fromYear,toYear
+1631231,James,Akinjo,2000-11-27,Baylor,USA,,,,0,0,0,1,0,1,-1,-1,-1,,
+202341,James,Anderson,1989-03-25,Oklahoma State,USA,78,213,5,1,1,0,1,1,1,2010,1,20,2010,2015
+200788,James,Augustine,1984-02-27,Illinois,USA,82,235,40,0,1,0,1,1,1,2006,2,41,2006,2007
+76085,James,Bailey,1957-05-21,Rutgers,USA,81,220,2,0,1,0,0,1,1,1979,1,6,1979,1987
+1630791,James,Banks III,1998-01-16,Georgia Tech,USA,,,,0,0,0,1,0,0,-1,-1,-1,,
+42541,James,Birsen,1900-01-01,,,,,,0,0,0,0,0,1,-1,-1,-1,2013,2013
+1628511,James,Blackmon Jr.,,,,,,,0,0,0,,,,,,,,
+1806,James,Blackwell,1968-02-25,Dartmouth,USA,72,190,8,1,0,0,0,1,1,-1,-1,-1,1994,1994
+1630547,James,Bouknight,2000-09-18,Connecticut,USA,76,190,,1,0,0,1,1,1,2021,1,11,2021,2023
+1642868,Carter,Bryant,2005-11-26,Arizona,USA,78,220,11,0,1,0,1,1,1,2025,1,14,2025,
+1629091,Elijah,Bryant,1995-04-19,Brigham Young,USA,77,210,3,1,0,0,0,1,1,-1,-1,-1,2020,2020
+76289,Emmette,Bryant,1938-11-04,DePaul,USA,73,175,7,1,0,0,0,1,1,1964,7,53,1964,1971
+76290,Joe,Bryant,1954-10-19,La Salle,USA,82,185,22,0,1,0,0,1,1,1975,1,14,1975,1982
+977,Kobe,Bryant,1978-08-23,Lower Merion HS (PA),USA,78,212,24,1,1,0,0,1,1,1996,1,13,1996,2015
+95,Mark,Bryant,1965-04-25,Seton Hall,USA,81,250,9,0,1,0,0,1,1,1988,1,21,1988,2002
+1628418,Thomas,Bryant,1997-07-31,Indiana,USA,81,248,3,0,1,1,1,1,1,2017,2,42,2017,
+76291,Wallace,Bryant,1959-07-14,San Francisco,USA,84,245,31,0,0,1,0,1,1,1982,2,30,1983,1985
+1530,James,Collins,1973-11-05,Florida State,USA,76,196,32,1,0,0,0,1,1,1997,2,36,1997,1997
+1526,James,Cotton,1975-12-14,Long Beach State,USA,77,220,,1,0,0,0,1,1,1997,2,32,1997,1998
+209,Dell,Curry,1964-06-25,Virginia Tech,USA,77,205,30,1,1,0,0,1,1,1986,1,15,1986,2001
+2201,Eddy,Curry,1982-12-05,Thornwood HS (IL),USA,84,295,,0,0,1,0,1,1,2001,1,4,2001,2012
+201191,JamesOn,Curry,1986-01-07,Oklahoma State,USA,75,190,,1,0,0,1,1,1,2007,2,51,2007,2009
+688,Michael,Curry,1968-08-22,Georgia Southern,USA,77,210,,1,1,0,0,1,1,-1,-1,-1,1993,2004
+203552,Seth,Curry,1990-08-23,Duke,USA,73,185,31,1,0,0,1,1,1,-1,-1,-1,2013,
+201939,Stephen,Curry,1988-03-14,Davidson,USA,74,185,30,1,0,0,0,1,1,2009,1,7,2009,
+76524,James,Davis,1932-04-22,St. John's (NY),USA,79,220,6,0,0,1,0,1,1,1954,6,52,1955,1955
+76583,James,Donaldson,1957-08-16,Washington State,USA,86,275,54,0,0,1,0,1,1,1979,4,73,1980,1994
+229,James,Edwards,1955-11-22,Washington,USA,85,252,53,0,0,1,0,1,1,1977,3,46,1977,1995
+203516,James,Ennis III,1990-07-01,Cal State-Long Beach,USA,78,215,,0,1,0,1,1,1,2013,2,50,2014,2021
+201620,James,Gist,,,,,,,0,0,0,,,,,,,,
+201935,James,Harden,1989-08-26,Arizona State,USA,77,220,1,1,0,0,0,1,1,2009,1,3,2009,
+76948,James,Hardy,1956-12-01,San Francisco,USA,80,220,11,0,1,0,0,1,1,1978,1,11,1978,1981
+77115,Aaron,James,1952-10-05,Grambling,USA,80,210,23,0,1,0,0,1,1,1974,2,28,1974,1978
+203108,Bernard,James,1985-02-07,Florida State,USA,82,235,55,0,0,1,1,1,1,2012,2,33,2012,2014
+1642355,Bronny,James,2004-10-06,Southern California,USA,74,210,9,1,0,0,1,1,1,2024,2,55,2024,
+202345,Damion,James,1987-10-07,Texas,USA,79,225,7,0,1,0,1,1,1,2010,1,24,2010,2013
+77116,Gene,James,1925-02-15,Marshall,USA,76,180,,0,1,0,0,1,1,-1,-1,-1,1948,1950
+1080,Henry,James,1965-07-29,St. Mary's (TX),USA,80,220,,0,1,0,0,1,1,-1,-1,-1,1990,1997
+1744,Jerome,James,1975-11-17,Florida A&M,USA,85,285,31,0,0,1,0,1,1,1998,2,36,1998,2008
+1629713,Justin,James,1997-01-24,Wyoming,USA,79,190,10,1,1,0,1,1,1,2019,2,40,2019,2020
+2544,LeBron,James,1984-12-30,St. Vincent-St. Mary HS (OH),USA,81,250,23,0,1,0,0,1,1,2003,1,1,2003,
+1628455,Mike,James,1990-08-18,Lamar,USA,73,175,55,1,0,0,1,1,1,-1,-1,-1,2017,2020
+2229,Mike,James,1975-06-23,Duquesne,USA,74,188,8,1,0,0,1,1,1,-1,-1,-1,2001,2013
+1642883,Sion,James,2002-12-04,Duke,USA,77,220,4,1,0,0,0,1,1,2025,2,33,2025,
+1906,Tim,James,1976-12-25,Miami,USA,79,214,25,0,1,0,0,1,1,1999,1,25,1999,2002
+201949,James,Johnson,1987-02-20,Wake Forest,USA,79,240,16,0,1,0,1,1,1,2009,1,16,2009,2024
+2592,James,Jones,1980-10-04,Miami,USA,80,218,1,1,1,0,0,1,1,2003,2,49,2003,2016
+2591,James,Lang,1983-10-17,Central Park Christian HS (AL),USA,82,305,,0,0,1,1,1,1,2003,2,48,2006,2006
+101260,Bryant,Matthews,,,,,,,0,0,0,,,,,,,,
+201651,James,Mays,,,,,,,0,0,0,,,,,,,,
+203949,James Michael,McAdoo,1993-01-04,North Carolina,USA,81,230,,0,1,0,1,1,1,-1,-1,-1,2014,2017
+203263,James,Nunnally,1990-07-14,Cal-Santa Barbara,USA,79,205,21,0,1,0,1,1,1,-1,-1,-1,2013,2020
+200753,Patrick,O'Bryant,1986-06-20,Bradley,USA,84,250,13,0,0,1,1,1,1,2006,1,9,2006,2009
+203948,Johnny,O'Bryant III,1993-06-01,Louisiana State,USA,81,257,,0,1,0,1,1,1,2014,2,36,2014,2017
+77783,James,Owens,1925-09-02,Baylor,USA,75,185,,1,0,0,0,1,1,-1,-1,-1,1949,1951
+1629615,James,Palmer Jr.,,,,,,,0,0,0,,,,,,,,
+1899,James,Posey,1977-01-13,Xavier,USA,80,217,41,0,1,0,0,1,1,1999,1,18,1999,2010
+77920,Jamesearl,Ray,1957-07-27,Jacksonville,USA,80,215,43,0,1,0,0,1,1,1980,1,5,1980,1982
+735,Bryant,Reeves,1973-06-08,Oklahoma State,USA,84,290,50,0,0,1,0,1,1,1995,1,6,1995,2000
+381,James,Robinson,1970-08-31,Alabama,USA,74,180,,1,0,0,0,1,1,1993,1,21,1993,2000
+1109,James,Scott,1972-06-03,St. John's (NY),USA,78,180,32,0,1,0,0,1,1,-1,-1,-1,1996,1996
+78150,James,Silas,1949-02-11,Stephen F. Austin,USA,73,180,13,1,0,0,0,1,1,1972,5,70,1976,1981
+101189,James,Singleton,1981-07-20,Murray State,USA,80,230,,0,1,0,,,,-1,-1,-1,2005,2011
+203480,James,Southerland,1990-04-28,Syracuse,USA,80,215,31,0,1,0,1,1,1,-1,-1,-1,2013,2013
+179,Bryant,Stith,1970-12-10,Virginia,USA,77,210,23,1,0,0,0,1,1,1992,1,13,1992,2002
+2839,James,Thomas,1980-11-22,Texas,USA,81,245,,0,1,0,0,1,1,-1,-1,-1,2004,2005
+56094,James,Thomas,,,,,,,0,0,0,,,,,,,,
+1627821,James,Webb III,1993-08-19,Boise State,USA,81,202,0,0,1,0,1,1,1,2016,,,2017,2017
+200778,James,White,1982-10-21,Cincinnati,USA,79,215,4,1,1,0,1,1,1,2006,2,31,2006,2012
+78533,James,Wilkes,1958-03-12,UCLA,USA,79,195,34,0,1,0,0,1,1,1980,3,50,1980,1982
+1630164,James,Wiseman,2001-03-31,Memphis,USA,83,240,,0,0,1,1,1,1,2020,1,2,2020,
+1460,James,Worthy,1961-02-27,North Carolina,USA,81,225,42,0,1,0,0,1,1,1982,1,1,1982,1993
+203923,James,Young,1995-08-16,Kentucky,USA,78,215,,1,1,0,1,1,1,2014,1,17,2014,2017

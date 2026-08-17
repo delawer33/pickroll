@@ -31,6 +31,33 @@ docker compose up --build
 - API — http://localhost:8000 (health-проба: `GET /health`, OpenAPI: `/docs`)
 - Frontend — http://localhost:5173
 
+## Данные
+
+Схема ведётся Alembic-миграциями; контейнер API их не применяет автоматически:
+
+```bash
+docker compose exec api alembic upgrade head
+```
+
+Наполнение историческими данными (сезоны с 2005-06, ~29 тыс. матчей и ~650 тыс. строк
+Box Score) — идемпотентный one-off модуль. Повторный запуск безопасен:
+
+```bash
+docker compose exec api python -m court_vision.seed
+```
+
+Датасет — [eoinamoore/historical-nba-data-and-player-box-scores](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores),
+версия запинена в коде (`court_vision/seed/source.py`): датасет обновляется еженощно, а seed
+обязан быть воспроизводим. Скачивание идёт публичным эндпоинтом Kaggle — учётные данные не
+нужны. Сырые CSV кладутся в `backend/data/raw/` и в git не попадают.
+
+Маленькая фикстура того же формата лежит в `backend/tests/fixtures/dataset/` и грузится тем же
+кодом — на ней работают интеграционные тесты:
+
+```bash
+cd backend && uv run python -m court_vision.seed --source-dir tests/fixtures/dataset
+```
+
 ## Разработка
 
 Бэкенд:

@@ -12,6 +12,7 @@ dependencies = [
     "asyncpg>=0.30",
     "alembic>=1.14",
     "structlog>=24.4",
+    "greenlet>=3.5.5",
 ]
 
 [dependency-groups]
@@ -23,6 +24,7 @@ dev = [
     "httpx>=0.28",
     "testcontainers[postgres]>=4.9",
     "pre-commit>=4.0",
+    "asyncpg-stubs>=0.31.3",
 ]
 
 [build-system]
@@ -48,11 +50,13 @@ select = [
     "SIM", # simplify
     "RUF",
 ]
+# Комментарии и докстринги в проекте на русском — кириллица в них не «неоднозначный символ».
+ignore = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "scripts"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
