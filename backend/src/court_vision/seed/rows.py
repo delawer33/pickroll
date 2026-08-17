@@ -9,6 +9,8 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Final
 
+from court_vision.players.models import GAME_TYPE_BY_CODE, UNKNOWN_GAME_TYPE
+
 # Историческая эра системы: сезоны с 2005-06 (см. CONTEXT.md).
 FIRST_SEASON: Final = "2005-06"
 
@@ -128,28 +130,13 @@ def optional_text(raw: str) -> str | None:
     return raw.strip() or None
 
 
-# Тип матча тоже закодирован первой цифрой идентификатора. Колонка `gameType` датасета
-# для одного и того же типа встречается в нескольких написаниях («NBA Cup», «Emirates NBA
-# Cup»), а цифра стабильна — по ней и нормализуем.
-_GAME_TYPE_BY_CODE: Final = {
-    "1": "Preseason",
-    "2": "Regular Season",
-    "3": "All-Star Game",
-    "4": "Playoffs",
-    "5": "Play-in Tournament",
-    "6": "NBA Cup Final",
-}
-UNKNOWN_GAME_TYPE: Final = "Unknown"
-
-# Сезонная статистика игрока по умолчанию считается по регулярному чемпионату — так её
-# публикуют NBA и все справочники.
-REGULAR_SEASON: Final = "Regular Season"
-
-
 def game_type_of(row: dict[str, str]) -> str:
+    """Колонка `gameType` датасета для одного и того же типа встречается в нескольких
+    написаниях («NBA Cup», «Emirates NBA Cup»), а цифра идентификатора стабильна — по ней
+    и нормализуем к словарю значений колонки."""
     game_id = row.get("gameId", "").strip()
     if len(game_id) == _GAME_ID_LENGTH and game_id.isdigit():
-        by_code = _GAME_TYPE_BY_CODE.get(game_id[0])
+        by_code = GAME_TYPE_BY_CODE.get(game_id[0])
         if by_code is not None:
             return by_code
     return row.get("gameType", "").strip() or UNKNOWN_GAME_TYPE

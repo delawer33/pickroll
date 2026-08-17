@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
+from typing import Annotated
 
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -36,3 +38,13 @@ async def session_scope(
             raise
         else:
             await session.commit()
+
+
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """Request-scoped сессия. Фабрика живёт в `app.state` — её создаёт lifespan."""
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    async for session in session_scope(session_factory):
+        yield session
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_session)]

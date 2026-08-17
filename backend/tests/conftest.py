@@ -11,14 +11,19 @@ from pathlib import Path
 from typing import Any
 
 import asyncpg
+import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
+from court_vision.config import Settings
 from court_vision.db import create_engine, create_session_factory
+from court_vision.main import create_app
 from court_vision.seed.__main__ import asyncpg_dsn
+from court_vision.seed.loader import seed_database
+from court_vision.seed.source import local_source
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = BACKEND_ROOT / "tests" / "fixtures" / "dataset"
@@ -85,3 +90,32 @@ async def session(
 ) -> AsyncIterator[AsyncSession]:
     async with session_factory() as db_session:
         yield db_session
+
+
+@pytest.fixture
+async def seeded_database(
+    clean_database: None,
+    db_connection: asyncpg.Connection[Any],
+    dataset_fixture_dir: Path,
+) -> None:
+    """Фикстура датасета, загруженная боевым seed-кодом: тесты работают на тех же данных
+    и в том же виде, что и приложение."""
+    await seed_database(db_connection, local_source(dataset_fixture_dir))
+
+
+@pytest.fixture
+async def api_client(
+    postgres_url: str,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[httpx.AsyncClient]:
+    """Клиент к приложению поверх тестового Postgres.
+
+    Фабрика сессий кладётся в `app.state` руками, а не через lifespan: ASGITransport его
+    не проигрывает, да и движок в тестах обязан быть привязан к event loop текущего теста.
+    """
+    app = create_app(Settings(database_url=postgres_url))
+    app.state.session_factory = session_factory
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client

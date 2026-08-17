@@ -1,0 +1,85 @@
+"""Wire-модели статистики игрока. snake_case по конвенциям; из них же берётся OpenAPI."""
+
+from datetime import date
+
+from pydantic import BaseModel, Field
+
+# Сезон в системе — строка `YYYY-YY` (см. players/models.py). Паттерн общий для валидации
+# входного параметра и для описания в OpenAPI.
+SEASON_PATTERN = r"^\d{4}-\d{2}$"
+
+
+class PlayerIdentity(BaseModel):
+    """Резолвнутая идентичность игрока: она едина сквозь все сезоны и команды."""
+
+    player_id: int
+    full_name: str
+    position: str | None = None
+    birth_date: date | None = None
+    country: str | None = None
+    draft_year: int | None = None
+
+
+class SeasonTotals(BaseModel):
+    """Суммы за сезон."""
+
+    minutes: float
+    points: int
+    rebounds_total: int
+    rebounds_offensive: int
+    rebounds_defensive: int
+    assists: int
+    steals: int
+    blocks: int
+    turnovers: int
+    fouls_personal: int
+    field_goals_made: int
+    field_goals_attempted: int
+    three_pointers_made: int
+    three_pointers_attempted: int
+    free_throws_made: int
+    free_throws_attempted: int
+
+
+class SeasonAverages(BaseModel):
+    """Показатели за игру. Проценты попаданий — от тоталов, а не среднее процентов по матчам:
+    среднее процентов завышало бы вклад матчей с одним броском."""
+
+    minutes: float
+    points: float
+    rebounds_total: float
+    rebounds_offensive: float
+    rebounds_defensive: float
+    assists: float
+    steals: float
+    blocks: float
+    turnovers: float
+    fouls_personal: float
+    field_goals_made: float
+    field_goals_attempted: float
+    three_pointers_made: float
+    three_pointers_attempted: float
+    free_throws_made: float
+    free_throws_attempted: float
+    field_goal_percentage: float | None = None
+    three_point_percentage: float | None = None
+    free_throw_percentage: float | None = None
+
+
+class SeasonStats(BaseModel):
+    """Агрегаты одного сезона, посчитанные на лету из строк Box Score."""
+
+    season: str = Field(pattern=SEASON_PATTERN)
+    games_played: int
+    totals: SeasonTotals
+    averages: SeasonAverages
+
+
+class PlayerStatsResponse(BaseModel):
+    """С заданным сезоном `seasons` содержит один элемент, без сезона — всю карьеру."""
+
+    player: PlayerIdentity
+    # Тип матчей, по которым посчитаны агрегаты: сравнивать сезоны игрока имеет смысл
+    # только внутри одного типа.
+    game_type: str
+    seasons: list[SeasonStats]

@@ -3,6 +3,7 @@
 from datetime import date
 from decimal import Decimal
 
+from court_vision.players.models import UNKNOWN_GAME_TYPE
 from court_vision.seed import rows
 
 
@@ -55,7 +56,7 @@ class TestGameTypeOf:
 
     def test_без_идентификатора_берётся_колонка(self) -> None:
         assert rows.game_type_of({"gameId": "", "gameType": "Regular Season"}) == "Regular Season"
-        assert rows.game_type_of({}) == rows.UNKNOWN_GAME_TYPE
+        assert rows.game_type_of({}) == UNKNOWN_GAME_TYPE
 
 
 class TestHistoricalEra:

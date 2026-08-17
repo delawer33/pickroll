@@ -1,9 +1,27 @@
 from datetime import date
+from typing import Final
 
 from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from court_vision.db import Base
+
+# Словарь значений `game_type` живёт рядом с колонкой, которую описывает: и seed, который
+# их записывает, и агрегация, которая по ним фильтрует, обязаны говорить одними строками.
+# Тип закодирован первой цифрой идентификатора матча в данных NBA.com.
+GAME_TYPE_BY_CODE: Final = {
+    "1": "Preseason",
+    "2": "Regular Season",
+    "3": "All-Star Game",
+    "4": "Playoffs",
+    "5": "Play-in Tournament",
+    "6": "NBA Cup Final",
+}
+UNKNOWN_GAME_TYPE: Final = "Unknown"
+
+# Сезонная статистика игрока по умолчанию считается по регулярному чемпионату — так её
+# публикуют NBA и все справочники.
+REGULAR_SEASON: Final = "Regular Season"
 
 
 class Team(Base):
