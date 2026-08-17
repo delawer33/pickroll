@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Court Vision — design reference</title>
+<style>
+@font-face {
+  font-family: 'Archivo'; font-style: normal; font-weight: 100 900; font-stretch: 62% 125%;
+  font-display: swap; src: url(fonts/archivo-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Archivo'; font-style: normal; font-weight: 100 900; font-stretch: 62% 125%;
+  font-display: swap; src: url(fonts/archivo-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ============================================================
+   TOKENS — the single source of truth. Components read roles
+   only; the ramp is never touched outside this block.
+   ============================================================ */
+:root {
+  --cv-slate-1: #e8eaeb; --cv-slate-2: #ffffff; --cv-slate-3: #f1f2f3;
+  --cv-slate-4: #e9ebec; --cv-slate-5: #dfe2e3; --cv-slate-6: #dfe3e5;
+  --cv-slate-7: #b6bcbf; --cv-slate-8: #101315; --cv-slate-11: #636a6e;
+  --cv-slate-12: #101315; --cv-slate-sec: #3c4245; --cv-slate-over: #ffffff;
+  --cv-red-solid: #cc2200; --cv-red-accent: #cc2200; --cv-red-text: #b81f00;
+  --cv-red-on: #ffffff;
+
+  --cv-series-1: #e8590c; --cv-series-2: #1baf7a; --cv-series-3: #2a78d6;
+  --cv-series-4: #eda100; --cv-series-5: #e87ba4; --cv-series-6: #008300;
+  --cv-series-7: #4a3aa7; --cv-series-8: #e34948;
+  --cv-div-pos: #2a78d6; --cv-div-neg: #e34948;
+  --cv-good: #046904; --cv-warning: #8a5a00; --cv-critical: #b02020;
+
+  /* roles */
+  --cv-paper: var(--cv-slate-1);
+  --cv-surface: var(--cv-slate-2);
+  --cv-overlay: var(--cv-slate-over);
+  --cv-fill: var(--cv-slate-3);
+  --cv-fill-hover: var(--cv-slate-4);
+  --cv-fill-active: var(--cv-slate-5);
+  --cv-ink: var(--cv-slate-12);
+  --cv-ink-secondary: var(--cv-slate-sec);
+  --cv-ink-muted: var(--cv-slate-11);
+  --cv-accent: var(--cv-red-accent);
+  --cv-accent-solid: var(--cv-red-solid);
+  --cv-accent-on: var(--cv-red-on);
+  --cv-accent-text: var(--cv-red-text);
+
+  /* ruling */
+  --cv-rule-heavy: 2px solid var(--cv-slate-8);
+  --cv-rule: 1px solid var(--cv-slate-7);
+  --cv-rule-row: 1px solid var(--cv-slate-6);
+  --cv-rule-v: 1px solid var(--cv-slate-6);
+
+  /* type */
+  --cv-font: 'Archivo', system-ui, sans-serif;
+  --cv-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* rhythm */
+  --cv-1: 4px; --cv-2: 8px; --cv-3: 12px; --cv-4: 16px; --cv-5: 20px;
+  --cv-6: 24px; --cv-8: 32px; --cv-10: 40px; --cv-12: 48px;
+  --cv-row: 34px; --cv-row-compact: 28px;
+  --cv-shadow-overlay: 0 1px 2px rgba(16,19,21,.07), 0 8px 24px -6px rgba(16,19,21,.15);
+  --cv-motion-fast: 110ms ease-out;
+}
+:root[data-theme="dark"] {
+  --cv-slate-1: #0f1113; --cv-slate-2: #15171a; --cv-slate-3: #1c1f23;
+  --cv-slate-4: #22262a; --cv-slate-5: #292e33; --cv-slate-6: #23272b;
+  --cv-slate-7: #363c41; --cv-slate-8: #e8eaeb; --cv-slate-11: #848c91;
+  --cv-slate-12: #eef0f1; --cv-slate-sec: #bcc2c6; --cv-slate-over: #1b1e22;
+  --cv-red-accent: #ff4a26; --cv-red-text: #ff6a4a;
+  --cv-series-2: #199e70; --cv-series-3: #3987e5; --cv-series-4: #c98500;
+  --cv-series-5: #d55181; --cv-series-7: #9085e9; --cv-series-8: #e66767;
+  --cv-div-pos: #3987e5; --cv-div-neg: #e66767;
+  --cv-good: #5fd45f; --cv-warning: #f0b429; --cv-critical: #f07070;
+  --cv-shadow-overlay: 0 1px 2px rgba(0,0,0,.55), 0 8px 24px -6px rgba(0,0,0,.6);
+}
+
+/* ============================================================
+   PRIMITIVES
+   ============================================================ */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--cv-paper); color: var(--cv-ink);
+  font: 400 14px/1.5 var(--cv-font); -webkit-font-smoothing: antialiased; }
+.num { font-variant-numeric: tabular-nums; }
+
+.t-display { font: 900 clamp(28px, 3.4vw, 36px)/1 var(--cv-font); font-stretch: 84%;
+  letter-spacing: -.03em; margin: 0; }
+.t-stat { font: 900 19px/1 var(--cv-font); font-stretch: 86%; letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; }
+.t-title { font: 700 19px/1.25 var(--cv-font); letter-spacing: -.01em; margin: 0; }
+.t-heading { font: 600 15px/1.35 var(--cv-font); margin: 0; }
+.t-read { font: 400 15px/1.6 var(--cv-font); }
+.t-body-sm { font: 400 12.5px/1.45 var(--cv-font); }
+.t-micro { font: 600 10px/1.2 var(--cv-font); font-stretch: 88%; letter-spacing: .15em;
+  text-transform: uppercase; }
+.t-mono { font: 400 12px/1.5 var(--cv-font-mono); }
+.muted { color: var(--cv-ink-muted); }
+.secondary { color: var(--cv-ink-secondary); }
+
+:where(button, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+
+.btn { appearance: none; cursor: pointer; border: 1px solid var(--cv-accent-solid);
+  background: var(--cv-accent-solid); color: var(--cv-accent-on); height: 30px;
+  padding: 0 var(--cv-3); border-radius: 0;
+  font: 600 11.5px/1 var(--cv-font); letter-spacing: .06em; text-transform: uppercase;
+  transition: background var(--cv-motion-fast); }
+.btn--ghost { background: transparent; color: var(--cv-ink); border-color: var(--cv-slate-7); }
+.btn--ghost:hover { background: var(--cv-fill); }
+.tag { font: 600 10px/1 var(--cv-font); letter-spacing: .1em; text-transform: uppercase;
+  color: var(--cv-accent-text); border: 1px solid var(--cv-accent); padding: 6px 7px; }
+
+/* ruled section head */
+.rhead { margin: var(--cv-6) 0 0; padding-bottom: 6px; border-bottom: var(--cv-rule);
+  color: var(--cv-ink); }
+
+/* table — horizontal AND vertical rules are the direction's signature */
+.tw { overflow-x: auto; }
+table.data { width: 100%; border-collapse: collapse; }
+table.data th { text-align: right; white-space: nowrap; padding: 9px 8px 7px;
+  color: var(--cv-ink-muted); border-bottom: var(--cv-rule-heavy); border-right: var(--cv-rule-v);
+  font: 600 10px/1.2 var(--cv-font); font-stretch: 84%; letter-spacing: .1em;
+  text-transform: uppercase; }
+table.data td { text-align: right; white-space: nowrap; padding: 0 8px; height: var(--cv-row);
+  font-size: 12.5px; color: var(--cv-ink-secondary); font-variant-numeric: tabular-nums;
+  border-bottom: var(--cv-rule-row); border-right: var(--cv-rule-v); }
+table.data th:first-child, table.data td:first-child { text-align: left; }
+table.data th:last-child, table.data td:last-child { border-right: 0; }
+table.data td:first-child { color: var(--cv-ink); font-weight: 500;
+  font-variant-numeric: normal; }
+table.data tbody tr:hover td { background: var(--cv-fill-hover); }
+
+/* diverging percentile bars — CSS, no chart library */
+.bars { display: grid; gap: 7px; }
+.bars > div { display: grid; grid-template-columns: 84px minmax(0,1fr) 28px; gap: var(--cv-3);
+  align-items: center; }
+.bars .k { color: var(--cv-ink-muted); text-align: right; }
+.bars .track { position: relative; height: 10px; background: var(--cv-fill); }
+.bars .track::before { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px;
+  width: 1px; background: var(--cv-slate-7); }
+.bars .fill { position: absolute; top: 0; bottom: 0; }
+.bars .fill.pos { left: 50%; background: var(--cv-div-pos); }
+.bars .fill.neg { right: 50%; background: var(--cv-div-neg); }
+.bars .v { font-size: 11.5px; text-align: right; color: var(--cv-ink-secondary);
+  font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   PAGE CHROME
+   ============================================================ */
+.wrap { max-width: 1160px; margin: 0 auto; padding: var(--cv-6) var(--cv-5) var(--cv-12); }
+.pagehead { display: flex; flex-wrap: wrap; gap: var(--cv-4); align-items: flex-end;
+  justify-content: space-between; padding-bottom: var(--cv-4); border-bottom: var(--cv-rule-heavy); }
+.pagehead p { margin: var(--cv-2) 0 0; max-width: 68ch; }
+.themes { display: inline-flex; border: var(--cv-rule); }
+.themes button { appearance: none; border: 0; background: transparent; cursor: pointer;
+  color: var(--cv-ink-secondary); height: 30px; padding: 0 var(--cv-3);
+  font: 500 12.5px/1 var(--cv-font); }
+.themes button + button { border-left: var(--cv-rule); }
+.themes button[aria-pressed="true"] { background: var(--cv-fill-active); color: var(--cv-ink); }
+
+section.block { margin-top: var(--cv-10); }
+section.block > header { padding-bottom: var(--cv-2); margin-bottom: var(--cv-4);
+  border-bottom: var(--cv-rule-heavy); }
+section.block > header p { margin: 5px 0 0; max-width: 78ch; }
+.demo { border: var(--cv-rule); background: var(--cv-surface); }
+
+/* swatches */
+.sw { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
+  gap: 1px; background: var(--cv-slate-6); border: var(--cv-rule); }
+.sw > div { background: var(--cv-surface); }
+.sw .chip { height: 40px; }
+.sw .meta { padding: 6px 8px; display: grid; gap: 1px; }
+.sw .nm { font: 600 10.5px/1.2 var(--cv-font); }
+
+/* ============================================================
+   1 · SHEET — one column, no cards; the stat line is a LINE
+   ============================================================ */
+.sheet { padding: var(--cv-6); max-width: 720px; }
+.sheet .kicker { color: var(--cv-ink-muted); }
+.sheet .sub { margin: 5px 0 0; color: var(--cv-ink-secondary); font-size: 12.5px; }
+.statline { margin: var(--cv-4) 0 0; padding: 11px 0; display: flex; flex-wrap: wrap;
+  gap: 3px var(--cv-4); align-items: baseline;
+  border-top: var(--cv-rule-heavy); border-bottom: var(--cv-rule); }
+.statline > span { display: inline-flex; align-items: baseline; gap: var(--cv-1); }
+.statline .k { color: var(--cv-ink-muted); }
+.sheet .prose { margin: var(--cv-4) 0 0; max-width: 68ch; }
+.sheet .prose b { color: var(--cv-accent-text); }
+.sheet .foot { margin-top: var(--cv-5); display: flex; align-items: center; gap: var(--cv-2); }
+.sheet .foot .tag { margin-left: auto; }
+
+/* ============================================================
+   2 · WORKTABLE — conversation + accumulating evidence rail
+   ============================================================ */
+.worktable { display: grid; grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); }
+.wt-talk { padding: var(--cv-4); display: flex; flex-direction: column; min-height: 400px; }
+.wt-rail { padding: var(--cv-4); background: var(--cv-paper); border-left: var(--cv-rule);
+  display: flex; flex-direction: column; gap: var(--cv-2); }
+.wt-h { color: var(--cv-ink-muted); margin-bottom: var(--cv-3); }
+.wt-you { align-self: flex-end; max-width: 80%; background: var(--cv-fill);
+  padding: 9px var(--cv-3); margin-bottom: var(--cv-4); }
+.wt-answer { max-width: 68ch; margin: 0; }
+.wt-answer sup { font: 700 10px/1 var(--cv-font); color: var(--cv-accent-text);
+  vertical-align: 5px; }
+.cursor { display: inline-block; width: 2px; height: 1em; background: var(--cv-accent);
+  vertical-align: -2px; margin-left: 2px; animation: blink 1.1s steps(2, start) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.wt-composer { margin-top: auto; border: var(--cv-rule); padding: 10px var(--cv-3);
+  color: var(--cv-ink-muted); }
+.evidence { border: var(--cv-rule); background: var(--cv-surface); padding: 10px var(--cv-3);
+  display: grid; gap: var(--cv-2); }
+.evidence > header { display: flex; align-items: baseline; gap: var(--cv-2);
+  color: var(--cv-ink-muted); }
+.evidence > header .name { color: var(--cv-ink); }
+.evidence > header .when { margin-left: auto; }
+.evidence blockquote { margin: 0; font-size: 12.5px; line-height: 1.5;
+  color: var(--cv-ink-secondary); }
+.evidence table.data td { height: var(--cv-row-compact); font-size: 12px; }
+
+/* ============================================================
+   3 · GRID — the table is the screen
+   ============================================================ */
+.gridscreen { display: grid; }
+.gr-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--cv-2);
+  padding: 7px var(--cv-2); border-bottom: var(--cv-rule); }
+.gr-tools .chip { border: var(--cv-rule); height: 24px; padding: 0 var(--cv-2);
+  display: inline-flex; align-items: center; color: var(--cv-ink-secondary); font-size: 12.5px; }
+.gr-tools .count { margin-left: auto; color: var(--cv-ink-muted); font-size: 12.5px;
+  font-variant-numeric: tabular-nums; }
+.gr-scroll { overflow: auto; max-height: 320px; }
+table.grid { width: 100%; border-collapse: separate; border-spacing: 0;
+  font-variant-numeric: tabular-nums; }
+table.grid th { position: sticky; top: 0; z-index: 3; background: var(--cv-fill);
+  text-align: right; white-space: nowrap; height: var(--cv-row-compact); padding: 0 9px;
+  color: var(--cv-ink-muted); border-bottom: var(--cv-rule-heavy); border-right: var(--cv-rule-v);
+  font: 600 10px/1.2 var(--cv-font); font-stretch: 84%; letter-spacing: .1em;
+  text-transform: uppercase; }
+table.grid td { text-align: right; white-space: nowrap; height: var(--cv-row-compact);
+  padding: 0 9px; font-size: 12.5px; color: var(--cv-ink-secondary);
+  border-bottom: var(--cv-rule-row); border-right: var(--cv-rule-v); }
+table.grid th:first-child, table.grid td:first-child { position: sticky; left: 0; z-index: 2;
+  text-align: left; background: var(--cv-surface); color: var(--cv-ink); font-weight: 500;
+  font-variant-numeric: normal; }
+table.grid th:first-child { z-index: 4; background: var(--cv-fill); }
+table.grid tbody tr:hover td { background: var(--cv-fill-hover); }
+table.grid tr.selected td { background: var(--cv-fill-active); }
+table.grid tr.selected td:first-child { background: var(--cv-fill-active);
+  box-shadow: inset 2px 0 0 var(--cv-accent); }
+table.grid tr.expansion td { background: var(--cv-fill); padding: var(--cv-3) 9px;
+  text-align: left; }
+.expansion .inline-bars { display: flex; flex-wrap: wrap; gap: var(--cv-3) var(--cv-5); }
+.expansion .inline-bars > div { display: grid; grid-template-columns: 66px 88px 24px;
+  gap: var(--cv-2); align-items: center; }
+.expansion .track { position: relative; height: 7px; background: var(--cv-slate-5); }
+.expansion .fill { position: absolute; inset: 0 auto 0 0; background: var(--cv-div-pos); }
+.expansion .fill.neg { background: var(--cv-div-neg); }
+.gr-dock { border-top: var(--cv-rule); padding: 9px var(--cv-2); display: flex;
+  align-items: center; gap: var(--cv-2); }
+
+/* ============================================================
+   4 · SPINE — chronology is the structure
+   ============================================================ */
+.spine { padding: var(--cv-6); }
+.sp-list { border-left: var(--cv-rule-row); margin-left: 78px; }
+.sp-item { position: relative; padding: 0 0 var(--cv-5) var(--cv-5); }
+.sp-item::before { content: ''; position: absolute; left: -4px; top: 5px; width: 7px;
+  height: 7px; background: var(--cv-slate-7); }
+.sp-item.today::before { background: var(--cv-accent); }
+.sp-when { position: absolute; left: -98px; top: 1px; width: 78px; text-align: right;
+  color: var(--cv-ink-muted); font: 400 11px/1.35 var(--cv-font-mono); }
+.sp-kind { color: var(--cv-ink-muted); }
+.sp-item.today .sp-kind { color: var(--cv-accent-text); }
+.sp-t { margin: 5px 0 0; font-size: 15px; }
+.sp-t .score { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sp-note { margin: 5px 0 0; max-width: 64ch; color: var(--cv-ink-secondary);
+  font-size: 14px; line-height: 1.58; }
+.sp-mini { display: flex; flex-wrap: wrap; gap: 3px var(--cv-4); margin-top: 6px;
+  font-size: 12.5px; color: var(--cv-ink-secondary); font-variant-numeric: tabular-nums; }
+.sp-mini .k { color: var(--cv-ink-muted); margin-right: var(--cv-1); }
+
+@media (prefers-reduced-motion: reduce) { .cursor { animation: none; } }
+@media (max-width: 860px) {
+  .worktable { grid-template-columns: minmax(0,1fr); }
+  .wt-rail { border-left: 0; border-top: var(--cv-rule); }
+  .sp-list { margin-left: 0; }
+  .sp-when { position: static; width: auto; text-align: left; display: block;
+    margin-bottom: 3px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="pagehead">
+    <div>
+      <h1 class="t-display">Design reference</h1>
+      <p class="secondary">Register — cool stock, a grid you can see, zero radius, one red.
+        Light theme is Slate, dark is Night. Below: the token layer, then the four screen
+        structures. Every colour here comes from a token; nothing is hardcoded.</p>
+    </div>
+    <div class="themes" role="group" aria-label="Theme">
+      <button type="button" data-theme-set="light" aria-pressed="true">Light</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+    </div>
+  </header>
+
+  <!-- ===================== TOKENS ===================== -->
+  <section class="block">
+    <header>
+      <h2 class="t-title">Tokens</h2>
+      <p class="t-body-sm secondary">Neutral ramp with fixed step roles, one accent, and the
+        validated categorical palette. Muted ink clears 4.5:1 on both the sheet and the fill.</p>
+    </header>
+
+    <h3 class="t-micro muted" style="margin-bottom:var(--cv-2)">Neutral ramp</h3>
+    <div class="sw">
+      <div><div class="chip" style="background:var(--cv-slate-1)"></div><div class="meta"><span class="nm">paper</span><span class="t-mono muted">1</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-2)"></div><div class="meta"><span class="nm">surface</span><span class="t-mono muted">2</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-3)"></div><div class="meta"><span class="nm">fill</span><span class="t-mono muted">3</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-4)"></div><div class="meta"><span class="nm">hover</span><span class="t-mono muted">4</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-5)"></div><div class="meta"><span class="nm">active</span><span class="t-mono muted">5</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-6)"></div><div class="meta"><span class="nm">rule-row</span><span class="t-mono muted">6</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-7)"></div><div class="meta"><span class="nm">rule</span><span class="t-mono muted">7</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-8)"></div><div class="meta"><span class="nm">rule-heavy</span><span class="t-mono muted">8</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-11)"></div><div class="meta"><span class="nm">ink-muted</span><span class="t-mono muted">11</span></div></div>
+      <div><div class="chip" style="background:var(--cv-slate-12)"></div><div class="meta"><span class="nm">ink</span><span class="t-mono muted">12</span></div></div>
+    </div>
+
+    <h3 class="t-micro muted" style="margin:var(--cv-5) 0 var(--cv-2)">Accent and status</h3>
+    <div class="sw">
+      <div><div class="chip" style="background:var(--cv-accent)"></div><div class="meta"><span class="nm">accent</span><span class="t-mono muted">focus, route</span></div></div>
+      <div><div class="chip" style="background:var(--cv-accent-solid)"></div><div class="meta"><span class="nm">solid</span><span class="t-mono muted">button</span></div></div>
+      <div><div class="chip" style="background:var(--cv-good)"></div><div class="meta"><span class="nm">good</span><span class="t-mono muted">text</span></div></div>
+      <div><div class="chip" style="background:var(--cv-warning)"></div><div class="meta"><span class="nm">warning</span><span class="t-mono muted">text</span></div></div>
+      <div><div class="chip" style="background:var(--cv-critical)"></div><div class="meta"><span class="nm">critical</span><span class="t-mono muted">text</span></div></div>
+    </div>
+
+    <h3 class="t-micro muted" style="margin:var(--cv-5) 0 var(--cv-2)">Categorical series — validated order</h3>
+    <div class="sw">
+      <div><div class="chip" style="background:var(--cv-series-1)"></div><div class="meta"><span class="nm">1 orange</span><span class="t-mono muted">brand</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-2)"></div><div class="meta"><span class="nm">2 aqua</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-3)"></div><div class="meta"><span class="nm">3 blue</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-4)"></div><div class="meta"><span class="nm">4 yellow</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-5)"></div><div class="meta"><span class="nm">5 magenta</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-6)"></div><div class="meta"><span class="nm">6 green</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-7)"></div><div class="meta"><span class="nm">7 violet</span><span class="t-mono muted">·</span></div></div>
+      <div><div class="chip" style="background:var(--cv-series-8)"></div><div class="meta"><span class="nm">8 red</span><span class="t-mono muted">·</span></div></div>
+    </div>
+    <p class="t-body-sm secondary" style="margin-top:var(--cv-3)">Slots are assigned in order and
+      never cycled — a ninth series is “Other”. On any-pair forms (scatter, small multiples) only
+      the first three slots are safe.</p>
+  </section>
+
+  <!-- ===================== 1 · SHEET ===================== -->
+  <section class="block">
+    <header>
+      <h2 class="t-title">Sheet — player page, report, game recap</h2>
+      <p class="t-body-sm secondary">One typographic column. No cards, no panels, no sidebar. The
+        stat line is set as a line, the way a box score reads; rules and space do every job a
+        border would.</p>
+    </header>
+    <div class="demo">
+      <article class="sheet">
+        <div class="t-micro kicker">Denver Nuggets · Center · 2024-25</div>
+        <h3 class="t-display" style="margin-top:var(--cv-2)">Nikola Jokić</h3>
+        <p class="sub">70 games · 33.8 minutes · per 100 possessions</p>
+
+        <div class="statline">
+          <span><b class="t-stat">29.6</b><i class="t-micro k">pts</i></span>
+          <span><b class="t-stat">12.7</b><i class="t-micro k">reb</i></span>
+          <span><b class="t-stat">10.2</b><i class="t-micro k">ast</i></span>
+          <span><b class="t-stat">4.4</b><i class="t-micro k">tov</i></span>
+          <span><b class="t-stat">66.1</b><i class="t-micro k">ts%</i></span>
+          <span><b class="t-stat">3.61</b><i class="t-micro k">ast/tov</i></span>
+        </div>
+
+        <p class="t-read prose">Volume is up, but the sharper change is in the risk profile.
+          Assists per 100 rose from 13.7 to 15.9 across three seasons while turnovers fell to
+          4.4 — <b>the best assist-to-turnover ratio of his career</b>. The pass also got earlier:
+          potential assists climbed to 25.8, so more of his creation happens before the defense
+          is set rather than out of a post stall.</p>
+
+        <h4 class="t-micro rhead">Percentile among qualified centers</h4>
+        <div class="bars" style="margin-top:var(--cv-3)">
+          <div><span class="t-micro k">Passing</span><span class="track"><span class="fill pos" style="width:49%"></span></span><span class="v">99</span></div>
+          <div><span class="t-micro k">Efficiency</span><span class="track"><span class="fill pos" style="width:46%"></span></span><span class="v">96</span></div>
+          <div><span class="t-micro k">Scoring</span><span class="track"><span class="fill pos" style="width:44%"></span></span><span class="v">94</span></div>
+          <div><span class="t-micro k">Rebounding</span><span class="track"><span class="fill pos" style="width:38%"></span></span><span class="v">88</span></div>
+          <div><span class="t-micro k">Rim defense</span><span class="track"><span class="fill neg" style="width:19%"></span></span><span class="v">31</span></div>
+          <div><span class="t-micro k">Blocks</span><span class="track"><span class="fill neg" style="width:28%"></span></span><span class="v">22</span></div>
+        </div>
+
+        <h4 class="t-micro rhead">Last five games</h4>
+        <div class="tw">
+          <table class="data">
+            <thead><tr><th>Opponent</th><th>Min</th><th>Pts</th><th>Reb</th><th>Ast</th><th>TS%</th></tr></thead>
+            <tbody>
+              <tr><td>Philadelphia</td><td>36</td><td>34</td><td>16</td><td>12</td><td>78.9</td></tr>
+              <tr><td>at Phoenix</td><td>34</td><td>27</td><td>14</td><td>9</td><td>64.2</td></tr>
+              <tr><td>Minnesota</td><td>38</td><td>22</td><td>18</td><td>13</td><td>55.8</td></tr>
+              <tr><td>at Sacramento</td><td>31</td><td>31</td><td>9</td><td>7</td><td>71.4</td></tr>
+              <tr><td>Oklahoma City</td><td>37</td><td>25</td><td>13</td><td>11</td><td>61.0</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="foot">
+          <button class="btn" type="button">Generate report</button>
+          <button class="btn btn--ghost" type="button">Compare</button>
+          <span class="tag">Watchlist</span>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== 2 · WORKTABLE ===================== -->
+  <section class="block">
+    <header>
+      <h2 class="t-title">Worktable — conversation</h2>
+      <p class="t-body-sm secondary">Two panes with different jobs and independent scrolling. The
+        Evidence rail accumulates every Tool result with its source and duration, so each number
+        stays auditable. Citations point at the card the claim came from.</p>
+    </header>
+    <div class="demo">
+      <div class="worktable">
+        <div class="wt-talk">
+          <div class="t-micro wt-h">Conversation</div>
+          <div class="wt-you">How has Jokić’s passing changed since 2023?</div>
+          <p class="t-read wt-answer">Volume is up, but the sharper change is in the risk profile.
+            Assists per 100 rose from 13.7 to 15.9 while turnovers fell to 4.4 — the best
+            assist-to-turnover ratio of his career<sup>1</sup>. The pass also got earlier:
+            potential assists climbed to 25.8, so more of his creation happens before the defense
+            is set<sup>2</sup><span class="cursor" aria-hidden="true"></span></p>
+          <div class="wt-composer t-body-sm">Ask a follow-up…</div>
+        </div>
+
+        <aside class="wt-rail">
+          <div class="t-micro wt-h" style="margin-bottom:0">Evidence · 3 pinned</div>
+
+          <div class="evidence">
+            <header class="t-mono"><span class="name">get_player_stats</span><span>3 seasons</span><span class="when">211 ms</span></header>
+            <table class="data">
+              <thead><tr><th>Season</th><th>Ast</th><th>Tov</th><th>Ast/Tov</th></tr></thead>
+              <tbody>
+                <tr><td>2022-23</td><td>13.7</td><td>5.1</td><td>2.69</td></tr>
+                <tr><td>2023-24</td><td>14.4</td><td>4.6</td><td>3.13</td></tr>
+                <tr><td>2024-25</td><td>15.9</td><td>4.4</td><td>3.61</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="evidence">
+            <header class="t-mono"><span class="name">percentiles</span><span class="when">62 centers</span></header>
+            <div class="bars">
+              <div><span class="t-micro k">Passing</span><span class="track"><span class="fill pos" style="width:49%"></span></span><span class="v">99</span></div>
+              <div><span class="t-micro k">Rim def</span><span class="track"><span class="fill neg" style="width:19%"></span></span><span class="v">31</span></div>
+            </div>
+          </div>
+
+          <div class="evidence">
+            <header class="t-mono"><span class="name">search_corpus</span><span class="when">chunk 14</span></header>
+            <blockquote>“…increasingly initiated offense from the perimeter rather than the post,
+              shortening the time between catch and pass.”</blockquote>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3 · GRID ===================== -->
+  <section class="block">
+    <header>
+      <h2 class="t-title">Grid — players directory, comparison</h2>
+      <p class="t-body-sm secondary">The table is the screen: edge to edge, 28px rows, sticky head
+        and sticky name column, vertical rules. The selected row opens in place instead of
+        navigating away. The toolbar wraps on narrow screens rather than clipping.</p>
+    </header>
+    <div class="demo gridscreen">
+      <div class="gr-tools">
+        <span class="chip">pos:C mp&gt;28</span>
+        <span class="chip">2024-25</span>
+        <span class="chip">Per 100</span>
+        <span class="chip">Sort: Ast ↓</span>
+        <span class="count">62 rows</span>
+      </div>
+      <div class="gr-scroll">
+        <table class="grid">
+          <thead>
+            <tr><th>Player</th><th>Team</th><th>GP</th><th>Min</th><th>Pts</th><th>Reb</th>
+              <th>Ast</th><th>Tov</th><th>Stl</th><th>Blk</th><th>FG%</th><th>3P%</th>
+              <th>TS%</th><th>Ast%</th><th>Usg%</th><th>+/−</th></tr>
+          </thead>
+          <tbody>
+            <tr class="selected"><td>N. Jokić</td><td>DEN</td><td>70</td><td>33.8</td><td>29.6</td><td>12.7</td><td>10.2</td><td>4.4</td><td>1.8</td><td>0.7</td><td>57.6</td><td>41.7</td><td>66.1</td><td>46.5</td><td>29.4</td><td>+8.9</td></tr>
+            <tr class="expansion"><td colspan="16">
+              <div class="inline-bars">
+                <div><span class="t-micro muted">Passing</span><span class="track"><span class="fill" style="width:99%"></span></span><span class="t-body-sm num">99</span></div>
+                <div><span class="t-micro muted">Efficiency</span><span class="track"><span class="fill" style="width:96%"></span></span><span class="t-body-sm num">96</span></div>
+                <div><span class="t-micro muted">Scoring</span><span class="track"><span class="fill" style="width:94%"></span></span><span class="t-body-sm num">94</span></div>
+                <div><span class="t-micro muted">Rim def</span><span class="track"><span class="fill neg" style="width:31%"></span></span><span class="t-body-sm num">31</span></div>
+              </div>
+            </td></tr>
+            <tr><td>D. Sabonis</td><td>SAC</td><td>72</td><td>35.1</td><td>26.4</td><td>18.9</td><td>8.1</td><td>3.6</td><td>1.1</td><td>0.6</td><td>59.4</td><td>37.9</td><td>63.8</td><td>34.2</td><td>25.1</td><td>+2.4</td></tr>
+            <tr><td>J. Embiid</td><td>PHI</td><td>39</td><td>33.6</td><td>38.1</td><td>15.4</td><td>7.4</td><td>5.1</td><td>1.4</td><td>2.1</td><td>52.9</td><td>38.8</td><td>64.7</td><td>28.6</td><td>36.2</td><td>+6.1</td></tr>
+            <tr><td>A. Sengün</td><td>HOU</td><td>63</td><td>31.5</td><td>27.7</td><td>14.1</td><td>7.9</td><td>4.2</td><td>1.5</td><td>1.0</td><td>53.7</td><td>29.7</td><td>58.4</td><td>32.8</td><td>29.8</td><td>+1.8</td></tr>
+            <tr><td>V. Wembanyama</td><td>SAS</td><td>46</td><td>32.7</td><td>32.4</td><td>16.8</td><td>6.5</td><td>4.9</td><td>1.9</td><td>5.1</td><td>47.1</td><td>35.2</td><td>58.9</td><td>24.1</td><td>32.6</td><td>−1.2</td></tr>
+            <tr><td>B. Adebayo</td><td>MIA</td><td>71</td><td>34.2</td><td>21.8</td><td>13.6</td><td>6.1</td><td>3.1</td><td>1.6</td><td>1.1</td><td>51.9</td><td>35.7</td><td>56.2</td><td>25.4</td><td>23.7</td><td>+3.6</td></tr>
+            <tr><td>K. Towns</td><td>NYK</td><td>72</td><td>34.9</td><td>28.9</td><td>16.2</td><td>4.8</td><td>3.4</td><td>1.2</td><td>0.9</td><td>52.6</td><td>42.0</td><td>65.4</td><td>18.9</td><td>27.1</td><td>+5.2</td></tr>
+            <tr><td>E. Mobley</td><td>CLE</td><td>71</td><td>30.6</td><td>24.1</td><td>14.0</td><td>4.4</td><td>2.9</td><td>1.3</td><td>2.0</td><td>55.4</td><td>37.0</td><td>60.1</td><td>17.6</td><td>23.9</td><td>+9.4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="gr-dock">
+        <span class="t-micro muted">Ask</span>
+        <span class="t-body-sm secondary">“Which of these improved most on assist-to-turnover
+          since 2023?”</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 4 · SPINE ===================== -->
+  <section class="block">
+    <header>
+      <h2 class="t-title">Spine — digest, conversation history</h2>
+      <p class="t-body-sm secondary">Chronology is the structure: one vertical rule, dates as
+        anchors, and every kind of entry hanging off it in order. Position in time is the
+        organising fact a daily-digest product actually has.</p>
+    </header>
+    <div class="demo">
+      <div class="spine">
+        <div class="sp-list">
+
+          <div class="sp-item today">
+            <div class="sp-when">Today<br />08:14</div>
+            <div class="t-micro sp-kind">Digest</div>
+            <p class="sp-t">Four watchlist games overnight. <b>Jokić</b> posted his fifth
+              triple-double in six outings.</p>
+            <div class="sp-mini">
+              <span><i class="t-micro k">Den</i>121 — 114 Phi</span>
+              <span><i class="t-micro k">Okc</i>108 — 99 Min</span>
+              <span><i class="t-micro k">Sac</i>117 — 120 Hou</span>
+            </div>
+          </div>
+
+          <div class="sp-item">
+            <div class="sp-when">Today<br />08:14</div>
+            <div class="t-micro sp-kind">Game recap</div>
+            <p class="sp-t">Nuggets <span class="score">121</span> — <span class="score">114</span> 76ers</p>
+            <p class="sp-note">Denver won the third quarter by eleven and never gave it back.
+              Jokić took over as a passer rather than a scorer — nine of his twelve assists came
+              after a perimeter catch.</p>
+            <div class="sp-mini">
+              <span><i class="t-micro k">Jokić</i>34 pts · 16 reb · 12 ast</span>
+              <span><i class="t-micro k">ts%</i>78.9</span>
+            </div>
+          </div>
+
+          <div class="sp-item">
+            <div class="sp-when">Yesterday<br />19:02</div>
+            <div class="t-micro sp-kind">Answer · 4 tools</div>
+            <p class="sp-t">“How has Jokić’s passing changed since 2023?”</p>
+            <p class="sp-note">Volume is up, but the sharper change is in the risk profile:
+              assists per 100 rose from 13.7 to 15.9 while turnovers fell to 4.4.</p>
+          </div>
+
+          <div class="sp-item">
+            <div class="sp-when">Mar 20<br />11:40</div>
+            <div class="t-micro sp-kind">Scouting report</div>
+            <p class="sp-t">Victor Wembanyama — <b>rim protection and switchability</b></p>
+            <div class="sp-mini">
+              <span><i class="t-micro k">blk</i>5.1 per 100</span>
+              <span><i class="t-micro k">pct</i>99th</span>
+              <span><i class="t-micro k">sections</i>6</span>
+            </div>
+          </div>
+
+          <div class="sp-item">
+            <div class="sp-when">Mar 18<br />08:14</div>
+            <div class="t-micro sp-kind">Digest</div>
+            <p class="sp-t">No watchlist games. Two rule questions answered from the rulebook.</p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  const root = document.documentElement
+  const buttons = document.querySelectorAll('[data-theme-set]')
+  buttons.forEach((b) => b.addEventListener('click', () => {
+    root.setAttribute('data-theme', b.dataset.themeSet)
+    buttons.forEach((o) => o.setAttribute('aria-pressed', String(o === b)))
+  }))
+</script>
+</body>
+</html>
