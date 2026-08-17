@@ -15,7 +15,8 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 COPY . .
 
-RUN chown -R node:node /app /pnpm
+# /pnpm существует только внутри шага с cache-mount'ом — здесь его нужно создать заново.
+RUN mkdir -p /pnpm && chown -R node:node /app /pnpm
 USER node
 
 EXPOSE 5173
