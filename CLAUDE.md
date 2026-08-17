@@ -1,6 +1,6 @@
 # Court Vision
 
-AI-ассистент баскетбольного скаута — backend-сервис для аналитики NBA. See [spec.md](spec.md) for the full product spec.
+AI-ассистент баскетбольного скаута — сервис аналитики NBA. See [spec.md](spec.md) for the full product spec, [docs/architecture.md](docs/architecture.md) for system-level decisions, [docs/roadmap.md](docs/roadmap.md) for the sprint plan, and [docs/conventions.md](docs/conventions.md) for mandatory code conventions.
 
 ## Agent skills
 
