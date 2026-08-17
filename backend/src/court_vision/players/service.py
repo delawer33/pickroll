@@ -7,7 +7,7 @@ materialized view в системе нет (см. docs/sprints/sprint-1.md). GRO
 Сервис не коммитит: unit of work равен HTTP-запросу, граница транзакции — в `db.py`.
 """
 
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import Row, Select, func, select
@@ -28,6 +28,7 @@ from court_vision.players.schemas import (
     SeasonStats,
     SeasonTotals,
 )
+from court_vision.rounding import round_half_up
 
 
 async def get_player_stats(
@@ -141,7 +142,7 @@ def _identity(player: Player) -> PlayerIdentity:
 
 def _averages(totals: SeasonTotals, games_played: int) -> SeasonAverages:
     def per_game(total: float) -> float:
-        return _round(Decimal(str(total)) / games_played, 1)
+        return round_half_up(Decimal(str(total)) / games_played, 1)
 
     return SeasonAverages(
         minutes=per_game(totals.minutes),
@@ -170,10 +171,4 @@ def _averages(totals: SeasonTotals, games_played: int) -> SeasonAverages:
 
 def _percentage(made: int, attempted: int) -> float | None:
     """None, а не ноль: не бросавший из-за дуги игрок — это не игрок с нулевым процентом."""
-    return _round(Decimal(made) / attempted, 3) if attempted else None
-
-
-def _round(value: Decimal, places: int) -> float:
-    """Округление половины вверх, а не банковское: 551 передача за 76 матчей — это 7.3 за
-    игру, как публикуют NBA, а встроенный round() дал бы 7.2."""
-    return float(value.quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP))
+    return round_half_up(Decimal(made) / attempted, 3) if attempted else None

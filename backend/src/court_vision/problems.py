@@ -5,6 +5,7 @@
 три разных формата ошибок.
 """
 
+from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any
 
@@ -13,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from court_vision.errors import DomainError
 
@@ -35,26 +37,79 @@ def problem_response(
     instance: str,
     problem_type: str = "about:blank",
     extensions: dict[str, Any] | None = None,
-    headers: dict[str, str] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
+    # Расширяющие члены кладутся первыми, зарегистрированные — поверх: иначе расширение
+    # с именем `status` перебило бы стандартный член, и тело противоречило бы статусной
+    # строке ответа.
     body: dict[str, Any] = {
+        **(extensions or {}),
         "type": problem_type,
         "title": title,
         "status": status,
         "detail": detail,
         "instance": instance,
     }
-    if extensions:
-        body.update(extensions)
     return JSONResponse(
         status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE, headers=headers
     )
 
 
+class ProblemDetailsMiddleware:
+    """Ловит необработанные исключения внутри CORS-слоя.
+
+    Обработчик, зарегистрированный на `Exception`, Starlette переносит в
+    ServerErrorMiddleware — самый внешний слой, снаружи CORSMiddleware. Ответ оттуда уходит
+    без `Access-Control-Allow-Origin`, и браузер вместо наших Problem Details видит сетевую
+    ошибку — ровно тогда, когда диагностика нужнее всего.
+
+    Сырой ASGI, а не BaseHTTPMiddleware: последний ломает стриминг, а в спринте 1 приезжает
+    SSE.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        response_started = False
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_wrapper)
+        except Exception:
+            path = str(scope.get("path", ""))
+            log.exception("request.unhandled_error", path=path)
+            if response_started:
+                # Заголовки уже ушли к клиенту — подменить ответ нечем, пусть падает наружу.
+                raise
+            response = problem_response(
+                status=500,
+                title="Internal server error",
+                detail="Внутренняя ошибка сервера.",
+                instance=path,
+                problem_type=INTERNAL_PROBLEM,
+            )
+            await response(scope, receive, send)
+
+
 def install_problem_handlers(app: FastAPI) -> None:
+    """Вызывать до `add_middleware(CORSMiddleware)`: Starlette делает самым внешним слой,
+    добавленный последним, а наш обработчик обязан оказаться внутри CORS."""
+    app.add_middleware(ProblemDetailsMiddleware)
     app.add_exception_handler(DomainError, _domain_error_handler)
     app.add_exception_handler(RequestValidationError, _validation_handler)
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)
+    # Подстраховка на исключения, брошенные снаружи ProblemDetailsMiddleware, — например
+    # в самом CORS-слое. Формат ответа тот же, но CORS-заголовков на нём уже не будет.
     app.add_exception_handler(Exception, _unhandled_handler)
 
 
@@ -97,6 +152,10 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
         title=_http_title(exc.status_code),
         detail=str(exc.detail),
         instance=request.url.path,
+        # Часть статусов без своих заголовков не имеет смысла: 405 обязан нести `Allow`,
+        # 429 — `Retry-After`. Стандартный обработчик Starlette их отдаёт, и подменяя его,
+        # мы обязаны их сохранить.
+        headers=exc.headers or None,
     )
 
 

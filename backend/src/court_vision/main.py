@@ -34,6 +34,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         else None
     )
 
+    # Строго в этом порядке: Starlette делает самым внешним слой, добавленный последним,
+    # а ответ об ошибке обязан пройти обратно через CORS — иначе браузер его не прочитает.
+    install_problem_handlers(app)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -41,8 +45,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    install_problem_handlers(app)
 
     app.include_router(health_router)
     app.include_router(_api_v1_router())

@@ -23,13 +23,18 @@ def create_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessi
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def session_scope(
-    session_factory: async_sessionmaker[AsyncSession],
-) -> AsyncIterator[AsyncSession]:
-    """Unit of work = HTTP-запрос: commit на выходе, rollback при исключении.
+async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """Request-scoped сессия; фабрика живёт в `app.state` — её создаёт lifespan.
 
-    Сервисы внутри запроса не коммитят — граница транзакции здесь.
+    Unit of work = HTTP-запрос: commit на выходе, rollback при исключении. Сервисы внутри
+    запроса не коммитят — граница транзакции здесь.
+
+    Транзакция закрывается ровно в этой функции, без промежуточного генератора: FastAPI
+    бросает исключение обратно в точку `yield`, и делегирование через `async for` эту
+    ошибку до вложенного генератора не донесло бы — тот остался бы висеть на своём `yield`,
+    а соединение вернулось бы в пул в состоянии `idle in transaction`.
     """
+    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
     async with session_factory() as session:
         try:
             yield session
@@ -38,13 +43,6 @@ async def session_scope(
             raise
         else:
             await session.commit()
-
-
-async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
-    """Request-scoped сессия. Фабрика живёт в `app.state` — её создаёт lifespan."""
-    session_factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
-    async for session in session_scope(session_factory):
-        yield session
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]

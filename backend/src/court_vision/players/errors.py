@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 from court_vision.errors import DomainError
 from court_vision.players.resolver import PlayerCandidate
 from court_vision.problems import PROBLEM_TYPE_PREFIX
+from court_vision.rounding import round_half_up
 
 
 class PlayerNotFound(DomainError):
@@ -73,5 +74,5 @@ def _candidate(candidate: PlayerCandidate) -> dict[str, Any]:
     return {
         "player_id": candidate.player_id,
         "full_name": candidate.full_name,
-        "similarity": round(candidate.similarity, 3),
+        "similarity": round_half_up(candidate.similarity, 3),
     }
