@@ -11,6 +11,10 @@ services:
       REDIS_URL: redis://cache:${REDIS_PORT_INTERNAL}/0
     ports:
       - "${API_PORT_EXTERNAL}:${API_PORT_INTERNAL}"
+    volumes:
+      # Кеш скачанного датасета переживает пересоздание контейнера: иначе каждый
+      # `compose up --build` заставляет seed качать гигабайты заново.
+      - dataset_cache:/app/data
     depends_on:
       db:
         condition: service_healthy
@@ -33,8 +37,13 @@ services:
     environment:
       VITE_API_BASE_URL: ${VITE_API_BASE_URL}
       VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+      FRONTEND_PORT_INTERNAL: ${FRONTEND_PORT_INTERNAL}
     ports:
       - "${FRONTEND_PORT_EXTERNAL}:${FRONTEND_PORT_INTERNAL}"
+    volumes:
+      # Исходники смонтированы ради HMR; node_modules остаются образными.
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - api
     networks:
@@ -46,7 +55,8 @@ services:
     env_file:
       - .env
     ports:
-      - "${POSTGRES_PORT_EXTERNAL}:${POSTGRES_PORT_INTERNAL}"
+      # Только на loopback: БД с дефолтным паролем не должна торчать в локальную сеть.
+      - "127.0.0.1:${POSTGRES_PORT_EXTERNAL}:${POSTGRES_PORT_INTERNAL}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -62,7 +72,8 @@ services:
     container_name: court_vision_cache
     image: redis:7-alpine
     ports:
-      - "${REDIS_PORT_EXTERNAL}:${REDIS_PORT_INTERNAL}"
+      # Redis без аутентификации — тем более только на loopback.
+      - "127.0.0.1:${REDIS_PORT_EXTERNAL}:${REDIS_PORT_INTERNAL}"
     volumes:
       - redis_data:/data
     networks:
@@ -77,6 +88,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  dataset_cache:
 
 networks:
   app_network:

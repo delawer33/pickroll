@@ -12,7 +12,8 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    // Порт задаётся окружением, чтобы совпадать с маппингом в docker-compose.
+    port: Number(process.env.FRONTEND_PORT_INTERNAL ?? 5173),
     host: true,
   },
   test: {

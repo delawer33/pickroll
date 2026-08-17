@@ -3,10 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from court_vision.config import Settings, get_settings
 from court_vision.health.router import router as health_router
+from court_vision.logging import configure_logging
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    configure_logging()
 
     app = FastAPI(title="Court Vision API", version="0.1.0")
     app.state.settings = settings

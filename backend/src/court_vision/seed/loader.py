@@ -9,6 +9,7 @@ COPY, а не построчные INSERT: на сотнях тысяч стро
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,6 +62,7 @@ BOX_SCORE_COLUMNS: Final = (
     "player_id",
     "season",
     "game_date",
+    "game_type",
     "team_id",
     "opponent_team_id",
     "is_home",
@@ -153,13 +155,16 @@ async def _load_games(connection: asyncpg.Connection[Any], path: Path) -> tuple[
     """
     known_team_ids = await _existing_ids(connection, "teams")
     game_ids: set[int] = set()
+    skipped: Counter[str] = Counter()
 
     def parsed_games() -> Iterator[row_parsers.GameRow]:
         for row in read_rows(path):
             game = row_parsers.game_row(row)
             if game is None:
+                skipped["unparsed_or_before_era"] += 1
                 continue
             if game[4] not in known_team_ids or game[5] not in known_team_ids:
+                skipped["unknown_team"] += 1
                 continue
             game_ids.add(game[0])
             yield game
@@ -171,6 +176,7 @@ async def _load_games(connection: asyncpg.Connection[Any], path: Path) -> tuple[
         conflict=("id",),
         records=parsed_games(),
     )
+    _log_skipped("games", skipped)
     return count, game_ids
 
 
@@ -179,32 +185,43 @@ async def _load_box_scores(
 ) -> int:
     known_player_ids = await _existing_ids(connection, "players")
     known_team_ids = await _existing_ids(connection, "teams")
+    skipped: Counter[str] = Counter()
 
     def parsed_box_scores() -> Iterator[row_parsers.BoxScoreRow]:
-        seen: set[tuple[int, int]] = set()
         for row in read_rows(path):
             box_score = row_parsers.box_score_row(row)
             if box_score is None:
+                skipped["unparsed"] += 1
                 continue
-            game_id, player_id, _, _, team_id, opponent_team_id = box_score[:6]
-            if game_id not in game_ids or player_id not in known_player_ids:
+            game_id, player_id = box_score[0], box_score[1]
+            team_id, opponent_team_id = box_score[5], box_score[6]
+            if game_id not in game_ids:
+                skipped["unknown_game"] += 1
+                continue
+            if player_id not in known_player_ids:
+                skipped["unknown_player"] += 1
                 continue
             if team_id not in known_team_ids or opponent_team_id not in known_team_ids:
+                skipped["unknown_team"] += 1
                 continue
-            # В датасете встречаются дубли «игрок-матч»; ON CONFLICT не спасает внутри
-            # одного INSERT, поэтому отсеиваем их здесь.
-            if (game_id, player_id) in seen:
-                continue
-            seen.add((game_id, player_id))
             yield box_score
 
-    return await _upsert_batched(
+    count = await _upsert_batched(
         connection,
         table="box_scores",
         columns=BOX_SCORE_COLUMNS,
         conflict=("game_id", "player_id"),
         records=parsed_box_scores(),
     )
+    _log_skipped("box_scores", skipped)
+    return count
+
+
+def _log_skipped(table: str, skipped: Counter[str]) -> None:
+    """Отброшенные строки — не молчаливая норма: без счётчиков подмена схемы датасета
+    выглядела бы как успешный seed с пустой таблицей."""
+    if skipped:
+        log.info("seed.skipped", table=table, **skipped)
 
 
 async def _existing_ids(connection: asyncpg.Connection[Any], table: str) -> set[int]:
@@ -250,17 +267,23 @@ async def _upsert(
 
     staging = f"staging_{table}"
     column_list = ", ".join(columns)
+    conflict_list = ", ".join(conflict)
     updates = ", ".join(f"{column} = EXCLUDED.{column}" for column in columns)
 
     async with connection.transaction():
-        await connection.execute(
-            f"CREATE TEMP TABLE {staging} (LIKE {table} INCLUDING DEFAULTS) ON COMMIT DROP"
-        )
+        # Не ON COMMIT DROP: внутри чужой транзакции asyncpg открывает SAVEPOINT, а его
+        # освобождение временную таблицу не удаляет — второй батч упал бы на «уже существует».
+        await connection.execute(f"DROP TABLE IF EXISTS {staging}")
+        await connection.execute(f"CREATE TEMP TABLE {staging} (LIKE {table} INCLUDING DEFAULTS)")
         await connection.copy_records_to_table(staging, records=records, columns=list(columns))
+        # DISTINCT ON: датасет может отдать одну и ту же сущность дважды, а ON CONFLICT
+        # не спасает от повторного ключа внутри одного INSERT.
         await connection.execute(
             f"INSERT INTO {table} ({column_list}) "
-            f"SELECT {column_list} FROM {staging} "
-            f"ON CONFLICT ({', '.join(conflict)}) DO UPDATE SET {updates}"
+            f"SELECT DISTINCT ON ({conflict_list}) {column_list} FROM {staging} "
+            f"ORDER BY {conflict_list} "
+            f"ON CONFLICT ({conflict_list}) DO UPDATE SET {updates}"
         )
+        await connection.execute(f"DROP TABLE {staging}")
 
     return len(records)

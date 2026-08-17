@@ -76,6 +76,30 @@ async def test_сезоны_до_исторической_эры_не_грузя
     )
 
 
+async def test_тип_матча_доезжает_до_строк_box_score(
+    db_connection: asyncpg.Connection[Any],
+    dataset_fixture_dir: Path,
+) -> None:
+    await seed_database(db_connection, local_source(dataset_fixture_dir))
+
+    # Без типа на самой строке сезонные средние молча смешали бы предсезонку с регуляркой.
+    assert (
+        await db_connection.fetchval("SELECT count(*) FROM box_scores WHERE game_type IS NULL") == 0
+    )
+    assert (
+        await db_connection.fetchval(
+            "SELECT count(*) FROM box_scores WHERE game_type = 'Regular Season'"
+        )
+        > 0
+    )
+
+    mismatched = await db_connection.fetchval(
+        "SELECT count(*) FROM box_scores b JOIN games g ON g.id = b.game_id "
+        "WHERE b.game_type <> g.game_type OR b.season <> g.season"
+    )
+    assert mismatched == 0
+
+
 async def test_строки_box_score_ссылаются_на_загруженные_матчи_и_игроков(
     db_connection: asyncpg.Connection[Any],
     dataset_fixture_dir: Path,

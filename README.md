@@ -49,7 +49,11 @@ docker compose exec api python -m court_vision.seed
 Датасет — [eoinamoore/historical-nba-data-and-player-box-scores](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores),
 версия запинена в коде (`court_vision/seed/source.py`): датасет обновляется еженощно, а seed
 обязан быть воспроизводим. Скачивание идёт публичным эндпоинтом Kaggle — учётные данные не
-нужны. Сырые CSV кладутся в `backend/data/raw/` и в git не попадают.
+нужны. Сырые CSV кладутся в `backend/data/raw/` (в контейнере — в volume `dataset_cache`) и в
+git не попадают.
+
+Сезон матча берётся из его идентификатора, а не из даты: сезон 2019-20 доигрывался в «пузыре»
+до октября 2020, и по дате эти матчи неотличимы от начала следующего сезона.
 
 Маленькая фикстура того же формата лежит в `backend/tests/fixtures/dataset/` и грузится тем же
 кодом — на ней работают интеграционные тесты:

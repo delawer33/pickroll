@@ -31,6 +31,12 @@ WORKDIR /app
 
 COPY --from=builder --chown=app:app /app /app
 
+# Сам WORKDIR создан root'ом: --chown выше переносит владельца содержимого, но не каталога,
+# а seed'у нужно создать в нём кеш датасета.
+RUN mkdir -p /app/data && chown -R app:app /app
+
 USER app
 
-CMD ["uvicorn", "court_vision.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENV API_PORT_INTERNAL=8000
+
+CMD ["sh", "-c", "uvicorn court_vision.main:app --host 0.0.0.0 --port ${API_PORT_INTERNAL}"]

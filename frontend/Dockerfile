@@ -1,4 +1,5 @@
-# Dev-образ: Vite dev-server с HMR. Прод-сборка приезжает в спринте 5 (Vercel).
+# Dev-образ: Vite dev-server. HMR работает при смонтированных исходниках — см.
+# docker-compose.yml. Прод-сборка приезжает в спринте 5 (Vercel).
 FROM node:22-bookworm-slim
 
 ENV PNPM_HOME="/pnpm" \
@@ -13,6 +14,9 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
 COPY . .
+
+RUN chown -R node:node /app /pnpm
+USER node
 
 EXPOSE 5173
 

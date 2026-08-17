@@ -15,6 +15,7 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      images: ${{ steps.filter.outputs.images }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -26,6 +27,12 @@ jobs:
               - '.github/workflows/ci.yml'
             frontend:
               - 'frontend/**'
+              - '.github/workflows/ci.yml'
+            images:
+              - 'backend/Dockerfile'
+              - 'frontend/Dockerfile'
+              - 'docker-compose.yml'
+              - '.env.example'
               - '.github/workflows/ci.yml'
 
   backend:
@@ -59,9 +66,9 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      # Версия pnpm берётся из поля packageManager в package.json — задавать её здесь
+      # вторично значит получить ERR_PNPM_BAD_PM_VERSION.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 10
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -74,3 +81,16 @@ jobs:
         run: pnpm typecheck
       - name: vitest
         run: pnpm test
+
+  images:
+    needs: changes
+    if: needs.changes.outputs.images == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Проверки выше гоняют тулинг на хосте, поэтому поломка Dockerfile или compose
+      # без этой джобы всплыла бы только у того, кто первым поднимет систему.
+      - name: docker compose config
+        run: docker compose --env-file .env.example config -q
+      - name: docker compose build
+        run: docker compose --env-file .env.example build

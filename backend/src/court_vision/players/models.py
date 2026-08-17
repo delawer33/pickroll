@@ -74,16 +74,20 @@ class BoxScore(Base):
 
     __tablename__ = "box_scores"
     __table_args__ = (
-        # Опора агрегации: GROUP BY (player_id, season) идёт index-only по этому индексу.
+        # Опора агрегации: GROUP BY по (player_id, season) идёт по этому индексу вместо
+        # полного перебора таблицы.
         Index("ix_box_scores_player_season", "player_id", "season"),
     )
 
     game_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("games.id"), primary_key=True)
     player_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("players.id"), primary_key=True)
 
-    # Денормализовано из games ради агрегации без join'а.
+    # Денормализовано из games ради агрегации без join'а. `game_type` здесь обязателен:
+    # без него сезонные средние молча смешали бы предсезонку и Матч всех звёзд с
+    # регулярным чемпионатом.
     season: Mapped[str] = mapped_column(String(7))
     game_date: Mapped[date] = mapped_column(Date)
+    game_type: Mapped[str] = mapped_column(String(32))
 
     team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"))
     opponent_team_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("teams.id"))

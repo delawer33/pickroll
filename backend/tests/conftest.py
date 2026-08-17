@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
 from court_vision.db import create_engine, create_session_factory
+from court_vision.seed.__main__ import asyncpg_dsn
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = BACKEND_ROOT / "tests" / "fixtures" / "dataset"
@@ -41,16 +42,22 @@ def postgres_url() -> Iterator[str]:
 def _run_migrations(database_url: str) -> None:
     config = Config(str(BACKEND_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_ROOT / "migrations"))
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
     command.upgrade(config, "head")
 
 
-@pytest.fixture(scope="session")
-def engine(postgres_url: str) -> AsyncEngine:
-    return create_engine(postgres_url)
+@pytest.fixture
+async def engine(postgres_url: str) -> AsyncIterator[AsyncEngine]:
+    """Движок на тест, а не на сессию: pytest-asyncio даёт каждому тесту свой event loop,
+    а соединения в пуле остаются привязанными к тому, в котором были открыты."""
+    db_engine = create_engine(postgres_url)
+    try:
+        yield db_engine
+    finally:
+        await db_engine.dispose()
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return create_session_factory(engine)
 
@@ -58,8 +65,6 @@ def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 @pytest.fixture
 async def db_connection(postgres_url: str) -> AsyncIterator[asyncpg.Connection[Any]]:
     """Сырое подключение asyncpg — им пользуется seed (COPY идёт мимо ORM)."""
-    from court_vision.seed.__main__ import asyncpg_dsn
-
     connection = await asyncpg.connect(asyncpg_dsn(postgres_url))
     try:
         yield connection

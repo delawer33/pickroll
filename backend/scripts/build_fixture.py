@@ -18,6 +18,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
+from court_vision.seed import rows
+
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_DIR = BACKEND_ROOT / "tests" / "fixtures" / "dataset"
 
@@ -31,7 +33,7 @@ PLAYER_IDS: Final = {
 }
 
 # 2004-05 лежит в фикстуре намеренно: он должен отсеиваться фильтром Исторической эры.
-SEASONS: Final = {f"{year}-{(year + 1) % 100:02d}" for year in range(2004, 2014)}
+SEASONS: Final = {rows.format_season(year) for year in range(2004, 2014)}
 
 # Дополнительные игроки в Players.csv — им незачем иметь box scores, они нужны
 # резолверу имени как кандидаты.
@@ -43,13 +45,9 @@ def _player_id(row: dict[str, str]) -> int | None:
     return int(value) if value else None
 
 
-def season_of(raw_date: str) -> str | None:
-    value = raw_date.strip()[:10]
-    if len(value) != 10:
-        return None
-    year, month = int(value[:4]), int(value[5:7])
-    start = year if month >= 8 else year - 1
-    return f"{start}-{(start + 1) % 100:02d}"
+def season_of(row: dict[str, str]) -> str | None:
+    """Правило сезона живёт в court_vision.seed.rows — второй копии быть не должно."""
+    return rows.season_of(row)
 
 
 def build(dataset_dir: Path) -> None:
@@ -83,7 +81,7 @@ def _write_box_scores(source: Path) -> set[str]:
         for row in reader:
             if _player_id(row) not in PLAYER_IDS:
                 continue
-            if season_of(row["gameDate"] or row["gameDateTimeEst"]) not in SEASONS:
+            if season_of(row) not in SEASONS:
                 continue
             writer.writerow(row)
             game_ids.add(row["gameId"])

@@ -8,7 +8,7 @@
 import csv
 import shutil
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Final
 
@@ -25,6 +25,23 @@ BOX_SCORES_FILE: Final = "PlayerStatistics.csv"
 DATASET_FILES: Final = (TEAMS_FILE, PLAYERS_FILE, GAMES_FILE, BOX_SCORES_FILE)
 
 _DOWNLOAD_URL: Final = "https://www.kaggle.com/api/v1/datasets/download/{ref}/{file}"
+_DOWNLOAD_TIMEOUT_SECONDS: Final = 60
+
+# Минимальный контракт с датасетом: без этих колонок разбор бессмыслен.
+REQUIRED_COLUMNS: Final = {
+    TEAMS_FILE: {"teamId", "teamCity", "teamName", "teamAbbrev", "seasonActiveTill"},
+    PLAYERS_FILE: {"personId", "firstName", "lastName"},
+    GAMES_FILE: {"gameId", "gameDate", "hometeamId", "awayteamId", "gameType"},
+    BOX_SCORES_FILE: {
+        "gameId",
+        "personId",
+        "gameDate",
+        "playerteamId",
+        "opponentteamId",
+        "numMinutes",
+        "points",
+    },
+}
 
 log = structlog.get_logger(__name__)
 
@@ -73,14 +90,45 @@ def _download_file(file_name: str, target: Path) -> None:
     log.info("dataset.file.download.start", file=file_name, version=DATASET_VERSION)
 
     partial = target.with_suffix(target.suffix + ".part")
-    with urllib.request.urlopen(url) as response, partial.open("wb") as handle:
+    with (
+        urllib.request.urlopen(url, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as response,
+        partial.open("wb") as handle,
+    ):
         shutil.copyfileobj(response, handle, length=1024 * 1024)
-    partial.replace(target)
+        expected = response.headers.get("Content-Length")
 
-    log.info("dataset.file.download.done", file=file_name, bytes=target.stat().st_size)
+    written = partial.stat().st_size
+    # Оборванное соединение не поднимает исключения: copyfileobj просто вернётся раньше.
+    # Без этой проверки обрезанный файл встал бы в кеш навсегда и «успешно» грузился.
+    if expected is not None and written != int(expected):
+        partial.unlink(missing_ok=True)
+        raise OSError(f"{file_name}: скачано {written} байт из {expected}, файл неполный")
+
+    partial.replace(target)
+    log.info("dataset.file.download.done", file=file_name, bytes=written)
 
 
 def read_rows(path: Path) -> Iterator[dict[str, str]]:
-    """Потоковое чтение CSV: файл box scores не помещается в память целиком."""
+    """Потоковое чтение CSV: файл box scores не помещается в память целиком.
+
+    `restval` важен: у короткой строки DictReader подставил бы None, и разбор упал бы
+    на `.strip()` вместо того, чтобы отбросить строку.
+    """
     with path.open(newline="", encoding="utf-8") as handle:
-        yield from csv.DictReader(handle)
+        reader = csv.DictReader(handle, restval="")
+        _ensure_expected_columns(path, reader.fieldnames)
+        yield from reader
+
+
+def _ensure_expected_columns(path: Path, fieldnames: Sequence[str] | None) -> None:
+    """Переименование колонки в новой версии датасета обязано падать шумно.
+
+    Иначе каждая строка тихо не разберётся, и seed отчитается об успехе с пустой таблицей.
+    """
+    required = REQUIRED_COLUMNS.get(path.name)
+    if required is None:
+        return
+
+    missing = sorted(required - set(fieldnames or ()))
+    if missing:
+        raise ValueError(f"{path.name}: в датасете нет колонок {', '.join(missing)}")

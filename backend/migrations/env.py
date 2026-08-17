@@ -18,7 +18,9 @@ if config.config_file_name is not None:
 # URL берётся из окружения (12-factor), а не из alembic.ini. Если вызывающая сторона
 # уже задала его явно (тесты с testcontainers), он имеет приоритет.
 if not config.get_main_option("sqlalchemy.url", default=""):
-    config.set_main_option("sqlalchemy.url", get_settings().database_url)
+    # Экранирование `%`: значение проходит через интерполяцию configparser, и URL-кодированный
+    # спецсимвол в пароле (`%40`) иначе роняет alembic до подключения к БД.
+    config.set_main_option("sqlalchemy.url", get_settings().database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
