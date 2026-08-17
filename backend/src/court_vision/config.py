@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # JWKS инстанса Clerk: `https://<frontend-api>/.well-known/jwks.json`. Источник ключей
+    # конфигурируем намеренно — тесты подставляют сюда локальный стаб и подписывают токены
+    # собственной RSA-парой, поэтому auth-код в CI и в проде один и тот же.
+    clerk_jwks_url: str = ""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

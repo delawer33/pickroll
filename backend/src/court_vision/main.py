@@ -1,9 +1,12 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from jwt import PyJWKClient
 
+from court_vision.auth.dependencies import get_current_user_id
+from court_vision.auth.router import router as auth_router
 from court_vision.config import Settings, get_settings
 from court_vision.db import create_engine, create_session_factory
 from court_vision.health.router import router as health_router
@@ -20,6 +23,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Court Vision API", version="0.1.0", lifespan=_lifespan)
     app.state.settings = settings
+    # Не в lifespan: клиент не ходит в сеть при создании (ключи скачиваются лениво и
+    # кешируются), а тестовый ASGITransport lifespan не проигрывает. Без URL клиента нет:
+    # приложение поднимается (health, docs), а запрос под auth упадёт как misconfiguration.
+    # Таймаут короткий: дефолтные 30 секунд на поход за JWKS держали бы слот тредпула
+    # на каждый токен с неизвестным kid.
+    app.state.jwks_client = (
+        PyJWKClient(settings.clerk_jwks_url, cache_keys=True, timeout=5)
+        if settings.clerk_jwks_url
+        else None
+    )
 
     app.add_middleware(
         CORSMiddleware,
@@ -40,7 +53,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 def _api_v1_router() -> APIRouter:
     """Все версионированные роутеры собираются в один: общие для `/api/v1` зависимости
     (в первую очередь auth) навешиваются здесь, а не в каждом модуле по отдельности."""
-    router = APIRouter(prefix=API_V1_PREFIX)
+    router = APIRouter(prefix=API_V1_PREFIX, dependencies=[Depends(get_current_user_id)])
+    router.include_router(auth_router)
     router.include_router(players_router)
     return router
 

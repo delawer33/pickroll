@@ -1,11 +1,30 @@
-/* Дизайн-токены приезжают в срезе #6; здесь — минимальный сброс каркаса. */
+/* Дизайн-токены: минимальное ядро для среза auth; полная система (палитра, сетка,
+   типографика, Tailwind) приезжает в срезе #6. CSS-переменные — единственный источник
+   правды: компоненты Clerk читают их через clerkAppearance.ts. */
+:root {
+  --cv-color-bg: #faf9f7;
+  --cv-color-surface: #ffffff;
+  --cv-color-text: #1c1917;
+  --cv-color-text-muted: #6b6560;
+  --cv-color-border: #e7e2dc;
+  --cv-color-accent: #e8590c;
+  --cv-radius: 8px;
+  --cv-font-sans:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  font-family: var(--cv-font-sans);
+  color: var(--cv-color-text);
+  background: var(--cv-color-bg);
 }
 
 .app-shell {
@@ -15,8 +34,12 @@ body {
 }
 
 .app-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 1rem;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid var(--cv-color-border);
+  background: var(--cv-color-surface);
 }
 
 .app-shell__brand {
@@ -26,4 +49,15 @@ body {
 .app-shell__main {
   flex: 1;
   padding: 1rem;
+}
+
+.app-shell__loading {
+  color: var(--cv-color-text-muted);
+}
+
+/* Форма входа Clerk по центру свободной области. */
+.app-shell__sign-in {
+  display: flex;
+  justify-content: center;
+  padding-top: 10vh;
 }

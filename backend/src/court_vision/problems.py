@@ -35,6 +35,7 @@ def problem_response(
     instance: str,
     problem_type: str = "about:blank",
     extensions: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     body: dict[str, Any] = {
         "type": problem_type,
@@ -45,7 +46,9 @@ def problem_response(
     }
     if extensions:
         body.update(extensions)
-    return JSONResponse(status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE)
+    return JSONResponse(
+        status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE, headers=headers
+    )
 
 
 def install_problem_handlers(app: FastAPI) -> None:
@@ -64,6 +67,7 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
         instance=request.url.path,
         problem_type=exc.problem_type,
         extensions=exc.extensions(),
+        headers=exc.headers or None,
     )
 
 

@@ -18,6 +18,8 @@ class DomainError(Exception):
     status: ClassVar[int] = 400
     problem_type: ClassVar[str] = "about:blank"
     title: ClassVar[str] = "Domain error"
+    # HTTP-заголовки ответа (например, WWW-Authenticate у 401 по RFC 6750).
+    headers: ClassVar[dict[str, str]] = {}
 
     def __init__(self, detail: str) -> None:
         super().__init__(detail)

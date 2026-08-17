@@ -6,6 +6,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [react()],
+  // .env один и лежит в корне монорепо (общий с Compose и бэкендом); без этого голый
+  // `pnpm dev` не увидел бы VITE_-переменных.
+  envDir: path.resolve(import.meta.dirname, '..'),
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),
