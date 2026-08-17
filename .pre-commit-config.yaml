@@ -1,0 +1,50 @@
+# Хуки читают те же конфиги, что и CI: backend/pyproject.toml и frontend/eslint.config.js.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --project backend ruff check --fix
+        language: system
+        types: [python]
+        files: ^backend/
+        pass_filenames: true
+
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --project backend ruff format
+        language: system
+        types: [python]
+        files: ^backend/
+        pass_filenames: true
+
+      - id: mypy
+        name: mypy --strict
+        entry: bash -c 'cd backend && uv run mypy'
+        language: system
+        types: [python]
+        files: ^backend/
+        pass_filenames: false
+
+      - id: eslint
+        name: eslint
+        entry: bash -c 'cd frontend && pnpm lint'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false
+
+      - id: tsc
+        name: tsc --noEmit
+        entry: bash -c 'cd frontend && pnpm typecheck'
+        language: system
+        files: ^frontend/.*\.(ts|tsx)$
+        pass_filenames: false

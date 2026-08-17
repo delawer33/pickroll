@@ -1,0 +1,29 @@
+/* Дизайн-токены приезжают в срезе #6; здесь — минимальный сброс каркаса. */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__header {
+  padding: 1rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.app-shell__brand {
+  font-weight: 600;
+}
+
+.app-shell__main {
+  flex: 1;
+  padding: 1rem;
+}
