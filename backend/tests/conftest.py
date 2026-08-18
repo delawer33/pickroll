@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,12 +18,21 @@ from typing import Any, Protocol
 import asyncpg
 import httpx
 import jwt
+import litellm
 import pytest
 from alembic import command
 from alembic.config import Config
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI
 from jwt.algorithms import RSAAlgorithm
+from litellm.types.utils import (
+    ChatCompletionDeltaToolCall,
+    Delta,
+    Function,
+    ModelResponseStream,
+    StreamingChoices,
+    Usage,
+)
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
@@ -89,7 +98,8 @@ async def db_connection(postgres_url: str) -> AsyncIterator[asyncpg.Connection[A
 @pytest.fixture
 async def clean_database(db_connection: asyncpg.Connection[Any]) -> None:
     await db_connection.execute(
-        "TRUNCATE box_scores, games, players, teams, llm_usage RESTART IDENTITY CASCADE"
+        "TRUNCATE box_scores, games, players, teams, llm_usage, conversations, messages "
+        "RESTART IDENTITY CASCADE"
     )
 
 
@@ -243,3 +253,151 @@ async def anonymous_client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+
+
+MODEL = "anthropic/claude-haiku-4-5"
+RESPONSE_MODEL = "claude-haiku-4-5-20251001"
+USAGE = Usage(prompt_tokens=1200, completion_tokens=80, total_tokens=1280)
+
+
+def tool_call_reply(name: str, arguments: str, *, call_id: str = "call_1") -> list[Any]:
+    """Ответ модели с запросом Инструмента. `arguments` — строка: модель присылает JSON
+    текстом, и тесты обязаны иметь возможность прислать сюда что угодно."""
+    call = ChatCompletionDeltaToolCall(
+        id=call_id, index=0, type="function", function=Function(name=name, arguments=arguments)
+    )
+    return _stream(
+        Delta(role="assistant", content=None, tool_calls=[call]), finish_reason="tool_calls"
+    )
+
+
+def text_reply(text: str, *, finish_reason: str = "stop", pieces: int = 3) -> list[Any]:
+    """Текстовый ответ, нарезанный на несколько чанков: одним куском он не отличался бы от
+    нестримингового вызова, а именно нарезка и проверяется."""
+    return _stream(
+        *(Delta(role="assistant", content=piece) for piece in _split(text, pieces)),
+        finish_reason=finish_reason,
+    )
+
+
+def preamble_tool_call_reply(
+    text: str, name: str, arguments: str, *, call_id: str = "call_1"
+) -> list[Any]:
+    """Модель проговаривает вслух («сейчас посмотрю») и в том же шаге просит Инструмент —
+    обычное поведение современных моделей, а не экзотика."""
+    call = ChatCompletionDeltaToolCall(
+        id=call_id, index=0, type="function", function=Function(name=name, arguments=arguments)
+    )
+    return _stream(
+        Delta(role="assistant", content=text),
+        Delta(content=None, tool_calls=[call]),
+        finish_reason="tool_calls",
+    )
+
+
+def truncated_reply(text: str, error: Exception) -> list[Any]:
+    """Поток, который успел отдать текст и оборвался ошибкой провайдера на середине —
+    самый неудобный случай: заголовки ответа клиенту уже ушли."""
+    return [*_stream(Delta(role="assistant", content=text), finish_reason="stop")[:1], error]
+
+
+def empty_reply() -> list[Any]:
+    """Поток без единого варианта ответа — срез фильтром на стороне шлюза. Usage при этом
+    провайдер присылает: вызов состоялся и оплачен."""
+    chunk = ModelResponseStream(id="chatcmpl-test", model=RESPONSE_MODEL, choices=[])
+    chunk.usage = USAGE
+    return [chunk]
+
+
+def _split(text: str, pieces: int) -> list[str]:
+    size = max(1, -(-len(text) // pieces))
+    return [text[index : index + size] for index in range(0, len(text), size)] or [text]
+
+
+def _stream(*deltas: Delta, finish_reason: str) -> list[Any]:
+    """Чанки одного ответа: дельты, затем закрывающий чанк с причиной остановки и usage —
+    ровно в том виде, в котором их присылает провайдер со `include_usage`."""
+    chunks = [
+        ModelResponseStream(
+            id="chatcmpl-test",
+            model=RESPONSE_MODEL,
+            choices=[StreamingChoices(index=0, delta=delta, finish_reason=None)],
+        )
+        for delta in deltas
+    ]
+    closing = ModelResponseStream(
+        id="chatcmpl-test",
+        model=RESPONSE_MODEL,
+        choices=[StreamingChoices(index=0, delta=Delta(), finish_reason=finish_reason)],
+    )
+    closing.usage = USAGE
+    return [*chunks, closing]
+
+
+@dataclass
+class FakeProvider:
+    """Подставной провайдер: отдаёт заготовленные потоки по порядку и запоминает запросы.
+
+    Запомненные `calls` — главный предмет проверки: только по ним видно, что именно доехало
+    до модели на следующем шаге.
+    """
+
+    replies: list[list[Any] | Exception]
+    repeat_last: bool = False
+    calls: list[dict[str, Any]] = field(default_factory=list)
+    # Закрыт ли последний отданный поток. Так проверяется, что брошенный ответ не оставляет
+    # за собой открытое соединение с провайдером.
+    closed: bool = False
+
+    async def __call__(self, **kwargs: Any) -> AsyncIterator[Any]:
+        # Копия истории, а не ссылка: цикл дописывает в тот же список, и без копии каждый
+        # запомненный запрос показывал бы состояние на конец прогона, а не на момент вызова.
+        self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
+        index = len(self.calls) - 1
+        if index >= len(self.replies):
+            if not self.repeat_last:
+                raise AssertionError("модель вызвана больше раз, чем ожидал тест")
+            index = len(self.replies) - 1
+        reply = self.replies[index]
+        if isinstance(reply, Exception):
+            raise reply
+        return self._emit(reply)
+
+    async def _emit(self, chunks: list[Any]) -> AsyncIterator[Any]:
+        """Исключение в списке чанков падает посреди потока — так воспроизводится обрыв."""
+        try:
+            for chunk in chunks:
+                if isinstance(chunk, Exception):
+                    raise chunk
+                yield chunk
+        finally:
+            self.closed = True
+
+    def tool_results(self) -> list[dict[str, Any]]:
+        """Результаты Инструментов, доехавшие до модели, — из последнего запроса."""
+        return [
+            json.loads(message["content"])
+            for message in self.calls[-1]["messages"]
+            if message.get("role") == "tool"
+        ]
+
+
+class ProviderFactory(Protocol):
+    def __call__(
+        self, *replies: list[Any] | Exception, repeat_last: bool = ...
+    ) -> FakeProvider: ...
+
+
+@pytest.fixture
+def provider(monkeypatch: pytest.MonkeyPatch) -> ProviderFactory:
+    """Ставит подставного провайдера на границу litellm — единственную подмену в тестах
+    агента. Заготовки складывает тест."""
+
+    def _install(
+        *replies: list[Any] | Exception, repeat_last: bool = False
+    ) -> FakeProvider:
+        fake = FakeProvider(replies=list(replies), repeat_last=repeat_last)
+        monkeypatch.setattr(litellm, "acompletion", fake)
+        return fake
+
+    return _install

@@ -8,9 +8,11 @@ from jwt import PyJWKClient
 from court_vision.auth.dependencies import get_current_user_id
 from court_vision.auth.router import router as auth_router
 from court_vision.config import Settings, get_settings
+from court_vision.conversations.router import router as conversations_router
 from court_vision.db import create_engine, create_session_factory
 from court_vision.health.router import router as health_router
 from court_vision.logging import configure_logging
+from court_vision.observability import configure_llm_observability
 from court_vision.players.router import router as players_router
 from court_vision.problems import install_problem_handlers
 
@@ -20,6 +22,7 @@ API_V1_PREFIX = "/api/v1"
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging()
+    configure_llm_observability(settings)
 
     app = FastAPI(title="Court Vision API", version="0.1.0", lifespan=_lifespan)
     app.state.settings = settings
@@ -57,6 +60,7 @@ def _api_v1_router() -> APIRouter:
     (в первую очередь auth) навешиваются здесь, а не в каждом модуле по отдельности."""
     router = APIRouter(prefix=API_V1_PREFIX, dependencies=[Depends(get_current_user_id)])
     router.include_router(auth_router)
+    router.include_router(conversations_router)
     router.include_router(players_router)
     return router
 

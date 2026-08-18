@@ -29,6 +29,42 @@ VALIDATION_PROBLEM = f"{PROBLEM_TYPE_PREFIX}invalid-request"
 INTERNAL_PROBLEM = f"{PROBLEM_TYPE_PREFIX}internal-error"
 
 
+def problem_body(
+    *,
+    status: int,
+    title: str,
+    detail: str,
+    instance: str,
+    problem_type: str = "about:blank",
+    extensions: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Тело Problem Details отдельно от ответа: тот же формат ошибки уезжает и внутрь
+    SSE-потока событием `error`, где ответа с кодом статуса уже нет."""
+    # Расширяющие члены кладутся первыми, зарегистрированные — поверх: иначе расширение
+    # с именем `status` перебило бы стандартный член, и тело противоречило бы статусной
+    # строке ответа.
+    return {
+        **(extensions or {}),
+        "type": problem_type,
+        "title": title,
+        "status": status,
+        "detail": detail,
+        "instance": instance,
+    }
+
+
+def domain_problem(error: DomainError, *, instance: str) -> dict[str, Any]:
+    """Проекция доменной ошибки на Problem Details — одна для HTTP-ответа и для SSE."""
+    return problem_body(
+        status=error.status,
+        title=error.title,
+        detail=error.detail,
+        instance=instance,
+        problem_type=error.problem_type,
+        extensions=error.extensions(),
+    )
+
+
 def problem_response(
     *,
     status: int,
@@ -39,17 +75,14 @@ def problem_response(
     extensions: dict[str, Any] | None = None,
     headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
-    # Расширяющие члены кладутся первыми, зарегистрированные — поверх: иначе расширение
-    # с именем `status` перебило бы стандартный член, и тело противоречило бы статусной
-    # строке ответа.
-    body: dict[str, Any] = {
-        **(extensions or {}),
-        "type": problem_type,
-        "title": title,
-        "status": status,
-        "detail": detail,
-        "instance": instance,
-    }
+    body = problem_body(
+        status=status,
+        title=title,
+        detail=detail,
+        instance=instance,
+        problem_type=problem_type,
+        extensions=extensions,
+    )
     return JSONResponse(
         status_code=status, content=body, media_type=PROBLEM_CONTENT_TYPE, headers=headers
     )
@@ -115,13 +148,10 @@ def install_problem_handlers(app: FastAPI) -> None:
 
 async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, DomainError)
-    return problem_response(
-        status=exc.status,
-        title=exc.title,
-        detail=exc.detail,
-        instance=request.url.path,
-        problem_type=exc.problem_type,
-        extensions=exc.extensions(),
+    return JSONResponse(
+        status_code=exc.status,
+        content=domain_problem(exc, instance=request.url.path),
+        media_type=PROBLEM_CONTENT_TYPE,
         headers=exc.headers or None,
     )
 

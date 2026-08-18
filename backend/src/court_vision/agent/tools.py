@@ -96,7 +96,7 @@ async def run_get_player_stats(session: AsyncSession, arguments: Mapping[str, An
 async def _guarded(tool: Tool, session: AsyncSession, arguments: Mapping[str, Any]) -> ToolResult:
     """Держит обещание «Инструмент не бросает» даже когда падает не он сам.
 
-    Оборвавшееся соединение с БД или таймаут запроса — не повод убивать ход агента: модель
+    Оборвавшееся соединение с БД или таймаут запроса — не повод убивать ответ агента: модель
     получает структурный отказ и может ответить пользователю тем, что уже знает.
     """
     try:

@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # Инструмента, самокоррекцию по кандидатам и ответ; дальше цикл почти наверняка зациклился.
     llm_max_steps: int = 6
 
+    # Langfuse: без ключей трейсинг просто не включается (см. `observability.py`) — локальная
+    # разработка не должна требовать внешнего сервиса. Хост пуст = облако Langfuse.
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+    langfuse_host: str = ""
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:

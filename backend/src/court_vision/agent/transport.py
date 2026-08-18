@@ -13,6 +13,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncGenerator
+from contextlib import aclosing
 from dataclasses import dataclass
 from decimal import Decimal
 from time import perf_counter
@@ -56,6 +58,13 @@ class ToolCall:
 
 
 @dataclass(frozen=True, slots=True)
+class TextDelta:
+    """Фрагмент текста, пришедший в потоке. Дописывается в конец — не заменяет собой."""
+
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class LlmReply:
     """Ответ модели на один шаг цикла."""
 
@@ -70,7 +79,7 @@ class LlmReply:
     finish_reason: str
 
 
-async def complete(
+async def stream(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     model: str,
@@ -78,49 +87,142 @@ async def complete(
     tools: list[dict[str, Any]],
     timeout: float,
     operation: str,
-) -> LlmReply:
-    """Один вызов модели: ответ в своих типах, строка учёта в `llm_usage`.
+    trace_metadata: dict[str, Any] | None = None,
+) -> AsyncGenerator[TextDelta | LlmReply]:
+    """Один вызов модели потоком: сначала `TextDelta` по мере поступления, в конце — ровно
+    один `LlmReply` с собранным ответом целиком.
+
+    Вызов только стриминговый, второго — «быстрого, без потока» — здесь нет намеренно: две
+    реализации одного вызова разъезжаются в деталях (учёт, классификация ошибок, сборка
+    ассистентского сообщения), и разъезд обнаруживается на той из них, которую реже гоняют.
+    Кому поток не нужен, тот его вычерпывает (`loop.answer`).
 
     Строку учёта пишет транспорт, а не цикл: так ни один вызов провайдера не может
     оказаться неучтённым, откуда бы его ни сделали.
     """
     started = perf_counter()
+    chunks: list[Any] = []
+    # Собранный ответ виден блоку finally: по нему пишется учёт, и второй раз собирать его
+    # там незачем.
+    response: Any | None = None
     try:
-        response = await litellm.acompletion(
+        try:
+            response_stream = await litellm.acompletion(
+                model=model,
+                messages=messages,
+                # None, а не пустой список: часть провайдеров отвергает пустой массив tools.
+                tools=tools or None,
+                timeout=timeout,
+                stream=True,
+                # Без этого блок usage в стриминге не приходит вовсе, и учёт получал бы нули
+                # на каждом вызове.
+                stream_options={"include_usage": True},
+                # Метаданные трассировки: их читают колбэки litellm (Langfuse), провайдеру
+                # они не уезжают. None, а не пустой словарь — чтобы не плодить пустые поля.
+                metadata=trace_metadata or None,
+            )
+            # aclosing, а не просто `async for`: цикл сам за собой итератор не закрывает, а
+            # брошенный поток провайдера держит открытым HTTP-соединение до сборки мусора —
+            # пользователь, ушедший со страницы посреди ответа, оставлял бы его за собой.
+            async with aclosing(response_stream) as parts:
+                async for chunk in parts:
+                    chunks.append(chunk)
+                    delta = _delta_text(chunk)
+                    if delta:
+                        yield TextDelta(delta)
+        except Exception as error:
+            # Широкий except намеренно: единственное, что здесь может упасть, — вызов
+            # провайдера, а иерархия его исключений принадлежит litellm и openai и меняется
+            # от версии к версии. Причину не теряем: класс уходит в расширяющие члены
+            # Problem Details, трейс — в лог.
+            log.exception("llm.call_failed", model=model, operation=operation)
+            cause = type(error).__name__
+            if isinstance(error, _REJECTION_ERRORS):
+                raise ProviderRequestRejected(model, cause) from error
+            raise ProviderUnavailable(model, cause) from error
+
+        response = _rebuilt(chunks, messages=messages)
+        if response is None or not response.choices:
+            # Поток закончился, не отдав ни одного пригодного варианта ответа — например срез
+            # контент-фильтром на стороне шлюза. Без этой проверки наружу ушёл бы IndexError
+            # мимо всей доменной классификации.
+            raise ProviderUnavailable(model, "EmptyResponse")
+        yield _reply(response)
+    finally:
+        # Учёт в finally: строка обязана появиться на каждый оплаченный вызов, а поток
+        # обрывают чаще всего снаружи — пользователь закрыл страницу, и обычный код после
+        # цикла до этого места уже не дошёл бы.
+        await _account(
+            session_factory,
+            # Оборванный поток собрать в ответ нечем, но usage провайдер мог успеть прислать:
+            # вызов оплачен, и пропуск такой строки занизил бы любую сумму по таблице.
+            response or _with_usage(chunks),
             model=model,
-            messages=messages,
-            # None, а не пустой список: часть провайдеров отвергает пустой массив tools.
-            tools=tools or None,
-            timeout=timeout,
+            operation=operation,
+            started=started,
         )
-    except Exception as error:
-        # Широкий except намеренно: единственное, что здесь может упасть, — вызов
-        # провайдера, а иерархия его исключений принадлежит litellm и openai и меняется от
-        # версии к версии. Причину не теряем: класс уходит в расширяющие члены Problem
-        # Details, трейс — в лог.
-        log.exception("llm.call_failed", model=model, operation=operation)
-        cause = type(error).__name__
-        if isinstance(error, _REJECTION_ERRORS):
-            raise ProviderRequestRejected(model, cause) from error
-        raise ProviderUnavailable(model, cause) from error
 
+
+async def _account(
+    session_factory: async_sessionmaker[AsyncSession],
+    billed: Any | None,
+    *,
+    model: str,
+    operation: str,
+    started: float,
+) -> None:
+    """Пишет строку учёта. Своих ошибок наружу не выпускает.
+
+    Ответ уже сгенерирован и оплачен, и уронить его из-за неудачной записи в таблицу
+    стоимости — обменять товар на чек: пользователь остался бы без ответа, который провайдер
+    уже посчитал.
+    """
+    if billed is None:
+        return
     latency_ms = int((perf_counter() - started) * 1000)
-    await _record_usage(
-        session_factory,
-        _usage_row(response, model=model, operation=operation, latency_ms=latency_ms),
-    )
+    try:
+        await _record_usage(
+            session_factory,
+            _usage_row(billed, model=model, operation=operation, latency_ms=latency_ms),
+        )
+    except Exception:
+        log.exception("llm.usage_not_recorded", model=model, operation=operation)
 
-    if not response.choices:
-        # 200 без вариантов ответа — например, срез контент-фильтром на стороне шлюза.
-        # Без этой проверки наружу ушёл бы IndexError мимо всей доменной классификации.
-        raise ProviderUnavailable(model, "EmptyResponse")
-    return _reply(response)
+
+def _rebuilt(chunks: list[Any], *, messages: list[dict[str, Any]]) -> Any | None:
+    """Собирает чанки обратно в обычный ответ силами litellm.
+
+    Склейка дельт tool-call'ов по индексам — работа транспортного слоя, и переписывать её у
+    себя значит держать копию формата каждого провайдера. Сборка падает на потоке без
+    вариантов ответа; это не сбой нашего кода, а такой же негодный ответ, как пустой.
+    """
+    if not chunks:
+        return None
+    try:
+        return litellm.stream_chunk_builder(chunks, messages=messages)
+    except Exception:
+        log.warning("llm.stream_unbuildable", chunks=len(chunks))
+        return None
+
+
+def _with_usage(chunks: list[Any]) -> Any | None:
+    """Чанк с блоком usage — обычно последний. Из него берётся учёт, когда ответа нет."""
+    return next((chunk for chunk in reversed(chunks) if getattr(chunk, "usage", None)), None)
+
+
+def _delta_text(chunk: Any) -> str:
+    """Текст из чанка. Пусто — если чанк несёт дельту tool-call'а или только блок usage."""
+    choices = getattr(chunk, "choices", None)
+    if not choices:
+        return ""
+    delta = getattr(choices[0], "delta", None)
+    return str(getattr(delta, "content", None) or "")
 
 
 async def _record_usage(session_factory: async_sessionmaker[AsyncSession], row: LlmUsage) -> None:
     """Учёт живёт в собственной транзакции, отдельно от транзакции запроса.
 
-    Иначе любая ошибка хода агента (упёрлись в потолок шагов, отказ провайдера на третьем
+    Иначе любая ошибка ответа агента (упёрлись в потолок шагов, отказ провайдера на третьем
     вызове) откатывала бы вместе с собой строки уже оплаченных вызовов — и в таблице
     стоимости не было бы ровно тех ходов, которые стоили дороже всего.
     """
