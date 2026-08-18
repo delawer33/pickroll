@@ -67,6 +67,19 @@ git не попадают.
 cd backend && uv run python -m court_vision.seed --source-dir tests/fixtures/dataset
 ```
 
+## LLM
+
+Провайдер задаётся строкой модели litellm в `LLM_MODEL` (`anthropic/claude-haiku-4-5`,
+`gemini/...`, `groq/...`) — смена провайдера не требует правок кода, только ключ в окружении
+(`ANTHROPIC_API_KEY` и аналоги). По [ADR-0001](docs/adr/0001-litellm-transport-own-agent-loop.md)
+litellm — только транспорт: агентный цикл, Инструменты и учёт стоимости написаны в
+`backend/src/court_vision/agent/`.
+
+Промпты лежат файлами в `backend/src/court_vision/agent/prompts/` — правка формулировки видна
+в диффе PR, а не прячется в коде.
+
+Каждый вызов модели пишет строку в таблицу `llm_usage`: токены, стоимость, латентность.
+
 ## Разработка
 
 Бэкенд:

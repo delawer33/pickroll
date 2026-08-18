@@ -4,6 +4,7 @@
 `Base.metadata` знал обо всех таблицах.
 """
 
+from court_vision.agent.models import LlmUsage
 from court_vision.players.models import BoxScore, Game, Player, Team
 
-__all__ = ["BoxScore", "Game", "Player", "Team"]
+__all__ = ["BoxScore", "Game", "LlmUsage", "Player", "Team"]

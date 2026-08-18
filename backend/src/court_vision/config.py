@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     # собственной RSA-парой, поэтому auth-код в CI и в проде один и тот же.
     clerk_jwks_url: str = ""
 
+    # Провайдер задаётся строкой модели litellm (`anthropic/...`, `gemini/...`, `groq/...`):
+    # смена провайдера — правка переменной окружения, а не кода. Ключи провайдеров litellm
+    # читает из окружения сам (`ANTHROPIC_API_KEY` и т.п.), поэтому их здесь нет.
+    llm_model: str = "anthropic/claude-haiku-4-5"
+    llm_timeout_seconds: float = 60.0
+    # Потолок шагов агентного цикла: один шаг — вызов модели. Шести хватает на вызов
+    # Инструмента, самокоррекцию по кандидатам и ответ; дальше цикл почти наверняка зациклился.
+    llm_max_steps: int = 6
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
