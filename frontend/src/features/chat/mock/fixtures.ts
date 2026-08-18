@@ -20,6 +20,101 @@ export interface AnswerFixture {
   citations: Citation[]
 }
 
+/** Длинный ответ на четырёх Инструментах: таблица, динамика по сезонам, перцентили и
+ * цитата из корпуса. Он же — проверка того, что рейка Evidence держит разнородные
+ * результаты подряд, а лента не разъезжается на длинном тексте. */
+const SHOOTING_COMPARISON: AnswerFixture = {
+  keywords: ['curry', 'lillard', 'shooter', 'shooting'],
+  suggestion: 'Compare Curry and Lillard as shooters since 2021',
+  answer:
+    'Both are volume shooters off the dribble, but the last four seasons separated them on efficiency rather than on volume. Curry has taken more threes in every season of the span and converted at a higher clip in three of the four[1]. The gap is widest where it matters most for a defense: pull-up threes, where Curry stayed above league-average efficiency in each season while Lillard dipped below it twice[2].\n\nThe shapes of the two curves differ as well. Curry’s attempt rate is flat and his percentage moves; Lillard’s attempt rate fell after 2022-23 while his percentage recovered, which reads as a player taking fewer of the hardest looks rather than as one who got better at them[2]. Against qualified guards, Curry sits in the 99th percentile on three-point volume and the 96th on efficiency, with the weakest part of his profile being rim finishing at the 34th[3].\n\nThe scouting read is that neither is declining as a shooter, but Lillard’s creation load has shifted toward the mid-range and to the free-throw line, and his gravity beyond the arc is now closer to elite-plus than to unique[4].',
+  toolCalls: [
+    {
+      id: 'call_stats_shooters',
+      name: 'get_player_stats',
+      source: 'Curry, Lillard · 4 seasons · per game',
+      durationMs: 243,
+      result: {
+        kind: 'table',
+        columns: ['Player', 'Season', 'GP', '3PA', '3P%', 'TS%', 'Pts'],
+        rows: [
+          ['S. Curry', '2021-22', '64', '11.7', '38.0', '59.3', '25.5'],
+          ['S. Curry', '2022-23', '56', '11.4', '42.7', '65.6', '29.4'],
+          ['S. Curry', '2023-24', '74', '11.8', '40.8', '62.4', '26.4'],
+          ['S. Curry', '2024-25', '70', '9.9', '39.7', '61.0', '24.5'],
+          ['D. Lillard', '2021-22', '29', '9.7', '32.4', '54.0', '24.0'],
+          ['D. Lillard', '2022-23', '58', '11.3', '37.1', '64.5', '32.2'],
+          ['D. Lillard', '2023-24', '73', '8.4', '35.4', '58.6', '24.3'],
+          ['D. Lillard', '2024-25', '58', '8.6', '37.6', '60.1', '24.9'],
+        ],
+      },
+    },
+    {
+      id: 'call_series_shooters',
+      name: 'compare_players',
+      source: 'three-point attempts · per game',
+      durationMs: 318,
+      result: {
+        kind: 'series',
+        metric: 'Three-point attempts',
+        unit: 'per game',
+        series: [
+          {
+            name: 'Curry',
+            points: [
+              { x: '2021-22', y: 11.7 },
+              { x: '2022-23', y: 11.4 },
+              { x: '2023-24', y: 11.8 },
+              { x: '2024-25', y: 9.9 },
+            ],
+          },
+          {
+            name: 'Lillard',
+            points: [
+              { x: '2021-22', y: 9.7 },
+              { x: '2022-23', y: 11.3 },
+              { x: '2023-24', y: 8.4 },
+              { x: '2024-25', y: 8.6 },
+            ],
+          },
+        ],
+      },
+    },
+    {
+      id: 'call_percentiles_shooters',
+      name: 'get_player_percentiles',
+      source: 'Stephen Curry · 84 qualified guards',
+      durationMs: 104,
+      result: {
+        kind: 'bars',
+        bars: [
+          { label: '3P volume', percentile: 99 },
+          { label: '3P efficiency', percentile: 96 },
+          { label: 'Pull-up 3P', percentile: 98 },
+          { label: 'Free throws', percentile: 71 },
+          { label: 'Rim finishing', percentile: 34 },
+        ],
+      },
+    },
+    {
+      id: 'call_corpus_shooters',
+      name: 'search_corpus',
+      source: 'Scouting notes · chunk 41',
+      durationMs: 167,
+      result: {
+        kind: 'quote',
+        text: '“…defenses still pick up Curry near half court, while Lillard is increasingly met at the arc — the difference in coverage says more about respected range than any percentage does.”',
+      },
+    },
+  ],
+  citations: [
+    { index: 1, toolCallId: 'call_stats_shooters' },
+    { index: 2, toolCallId: 'call_series_shooters' },
+    { index: 3, toolCallId: 'call_percentiles_shooters' },
+    { index: 4, toolCallId: 'call_corpus_shooters' },
+  ],
+}
+
 export const ANSWER_FIXTURES: AnswerFixture[] = [
   {
     keywords: ['jokic', 'jokić', 'passing'],
@@ -116,6 +211,7 @@ export const ANSWER_FIXTURES: AnswerFixture[] = [
       { index: 2, toolCallId: 'call_stats_wemby' },
     ],
   },
+  SHOOTING_COMPARISON,
 ]
 
 export function findFixture(question: string): AnswerFixture | undefined {
@@ -133,6 +229,7 @@ export interface ConversationSummary {
 }
 
 export const MOCK_CONVERSATIONS: ConversationSummary[] = [
+  { id: 'curry-lillard', title: 'Curry vs Lillard as shooters', when: 'Today' },
   { id: 'jokic-passing', title: 'Jokić’s passing since 2023', when: 'Today' },
   { id: 'lebron-2012-13', title: 'LeBron in 2012-13', when: 'Yesterday' },
   { id: 'wemby-rim', title: 'Wembanyama at the rim', when: 'Mar 20' },
@@ -140,6 +237,7 @@ export const MOCK_CONVERSATIONS: ConversationSummary[] = [
 
 /** Вопрос, с которого начинался сохранённый Диалог. */
 export const CONVERSATION_QUESTIONS: Record<string, string> = {
+  'curry-lillard': 'Compare Curry and Lillard as shooters since 2021',
   'jokic-passing': 'How has Jokić’s passing changed since 2023?',
   'lebron-2012-13': 'What did LeBron average in 2012-13?',
   'wemby-rim': 'How good is Wembanyama’s rim protection?',

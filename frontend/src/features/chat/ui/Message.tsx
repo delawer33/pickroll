@@ -21,11 +21,16 @@ export function Message({ message, onCitationClick, onRetry }: MessageProps) {
     )
   }
 
+  const paragraphs = message.text === '' ? [] : message.text.split('\n\n')
+
   return (
     <div className="cv-enter flex flex-col gap-3">
-      {message.text !== '' && (
-        <p className="t-read max-w-read text-ink">
-          {splitAnswer(message.text, message.citations).map((part, position) => {
+      {/* Длинный ответ разбит на абзацы: колонка 68ch спасает от длины строки, но не
+          от стены текста. Курсор печати живёт в последнем абзаце — он показывает, где
+          сейчас пишет Агент. */}
+      {paragraphs.map((paragraph, index) => (
+        <p key={index} className="t-read max-w-read text-ink">
+          {splitAnswer(paragraph, message.citations).map((part, position) => {
             if (part.kind === 'text') {
               return <span key={position}>{part.text}</span>
             }
@@ -53,9 +58,9 @@ export function Message({ message, onCitationClick, onRetry }: MessageProps) {
               </sup>
             )
           })}
-          {message.streaming && <TypingCursor />}
+          {message.streaming && index === paragraphs.length - 1 && <TypingCursor />}
         </p>
-      )}
+      ))}
 
       {/* Пока не пришло ни одного токена, курсор — единственный признак работы. */}
       {message.text === '' && message.streaming && (

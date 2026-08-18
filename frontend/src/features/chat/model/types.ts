@@ -8,11 +8,19 @@ import type { Problem } from '@/shared/api/client'
  * ту же форму, чтобы подмена источника не переписывала компоненты.
  */
 
+/** Одна серия динамики по сезонам: имя серии говорит, чьё это, точки — значения. */
+export interface Series {
+  name: string
+  points: Array<{ x: string; y: number }>
+}
+
 /** Результат Инструмента — то, что показывается в карточке Evidence. */
 export type ToolResult =
   | { kind: 'table'; columns: string[]; rows: string[][] }
   | { kind: 'bars'; bars: Array<{ label: string; percentile: number }> }
   | { kind: 'quote'; text: string }
+  /** Динамика по сезонам: линия на сезон-ось, у каждой серии своё имя и слот палитры. */
+  | { kind: 'series'; metric: string; unit: string; series: Series[] }
 
 /** Вызов Инструмента со штампом источника и длительности: это провенанс, который
  * пользователь должен иметь возможность проверить (§7.2). */

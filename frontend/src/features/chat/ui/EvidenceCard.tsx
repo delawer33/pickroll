@@ -1,6 +1,8 @@
 import type { ToolCall, ToolResult } from '@/features/chat/model/types'
-import { cn } from '@/shared/ui/cn'
+import { SeriesResult } from '@/features/chat/ui/SeriesResult'
 import { Collapsible } from '@/shared/ui/Collapsible'
+import { DataTable } from '@/shared/ui/DataTable'
+import { cn } from '@/shared/ui/cn'
 
 export interface EvidenceCardProps {
   toolCall: ToolCall
@@ -50,49 +52,20 @@ function ToolResultView({ result }: { result: ToolResult }) {
   }
 
   if (result.kind === 'table') {
-    return (
-      // Широкий контент скроллится внутри себя: страница по горизонтали не
-      // скроллится никогда (§7.3).
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              {result.columns.map((column) => (
-                <th
-                  key={column}
-                  scope="col"
-                  className="t-micro border-b-2 border-r border-b-line-heavy border-r-line-row px-2 pt-2 pb-1 text-right whitespace-nowrap text-ink-muted last:border-r-0 first:text-left"
-                >
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {result.rows.map((row, rowIndex) => (
-              // Ключ по позиции: строки таблицы приходят как есть и могут повторяться
-              // значениями (два сезона с одинаковым сплитом).
-              <tr key={rowIndex}>
-                {row.map((cell, column) => (
-                  <td
-                    key={column}
-                    className="num h-row-compact border-r border-b border-r-line-row border-b-line-row px-2 text-right whitespace-nowrap text-ink-secondary last:border-r-0 first:text-left first:font-medium first:text-ink"
-                  >
-                    {cell}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
+    return <DataTable columns={result.columns} rows={result.rows} />
+  }
+
+  if (result.kind === 'series') {
+    return <SeriesResult metric={result.metric} unit={result.unit} series={result.series} />
   }
 
   return (
     <div className="grid gap-2">
       {result.bars.map((bar) => (
-        <div key={bar.label} className="grid grid-cols-[84px_minmax(0,1fr)_28px] items-center gap-3">
+        <div
+          key={bar.label}
+          className="grid grid-cols-[84px_minmax(0,1fr)_28px] items-center gap-3"
+        >
           <span className="t-micro text-right text-ink-muted">{bar.label}</span>
           {/* Перцентиль — полярность относительно 50-го, а не магнитуда: полоса
               растёт от середины в свою сторону (§6.5). */}
