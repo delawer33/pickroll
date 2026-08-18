@@ -30,7 +30,11 @@ export function EvidenceCard({ toolCall, active = false }: EvidenceCardProps) {
             {/* Штамп источника — первое, чем можно пожертвовать по ширине: имя
                 Инструмента и длительность нужны целиком. */}
             <span className="min-w-0 flex-1 truncate">{toolCall.source}</span>
-            <span className="num shrink-0">{toolCall.durationMs} ms</span>
+            {/* Длительности нет у вызова, о котором сообщили до его выполнения — пустое
+                место лучше, чем «0 ms», читаемое как мгновенный вызов. */}
+            {toolCall.durationMs !== undefined && (
+              <span className="num shrink-0">{toolCall.durationMs} ms</span>
+            )}
           </header>
         }
       >

@@ -97,8 +97,10 @@ async def reply_events(
             match event:
                 case TokenChunk(text=text):
                     yield _event(TokenEvent(text=text))
-                case ToolCalled(name=name, arguments=arguments):
-                    yield _event(ToolCallEvent(name=name, arguments=arguments))
+                case ToolCalled(id=call_id, name=name, arguments=arguments):
+                    yield _event(
+                        ToolCallEvent(tool_call_id=call_id, name=name, arguments=arguments)
+                    )
                 case AgentAnswer(text=text):
                     message_id = await _save_answer(
                         session_factory, conversation_id=conversation_id, text=text

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { createMockAnswerStream } from '@/features/chat/mock/mockStream'
+import { createMockAnswerStream } from '@/features/chat/test/fixtureStream'
 import type { StreamEvent } from '@/features/chat/model/types'
 
 const stream = createMockAnswerStream({ sleep: () => Promise.resolve() })

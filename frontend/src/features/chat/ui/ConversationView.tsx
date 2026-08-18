@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { ANSWER_FIXTURES } from '@/features/chat/mock/fixtures'
+import { SUGGESTED_QUESTIONS } from '@/features/chat/model/suggestions'
 import type { AnswerStream, Message, ToolCall } from '@/features/chat/model/types'
 import { useConversationStream } from '@/features/chat/model/useConversationStream'
 import { Composer } from '@/features/chat/ui/Composer'
@@ -11,16 +11,20 @@ import { EmptyState } from '@/shared/ui/EmptyState'
 export interface ConversationViewProps {
   initialMessages?: Message[]
   initialToolCalls?: ToolCall[]
-  /** Шов для #8: сюда придёт SSE вместо мока. Тесты подставляют мгновенный поток. */
-  stream?: AnswerStream
+  /** Источник ответа: за ним SSE Диалога. Тесты подставляют мгновенный поток. */
+  stream: AnswerStream
 }
 
 /** Структура Worktable: слева Диалог, справа рейка Evidence, у панелей независимый
  * скролл (docs/design-system.md §7.2). Ниже 900px панели складываются в одну колонку —
  * на две ширины больше нет. */
-export function ConversationView({ initialMessages, initialToolCalls, stream }: ConversationViewProps) {
+export function ConversationView({
+  initialMessages,
+  initialToolCalls,
+  stream,
+}: ConversationViewProps) {
   const conversation = useConversationStream({
-    ...(stream !== undefined && { stream }),
+    stream,
     ...(initialMessages !== undefined && { initialMessages }),
     ...(initialToolCalls !== undefined && { initialToolCalls }),
   })
@@ -43,16 +47,16 @@ export function ConversationView({ initialMessages, initialToolCalls, stream }: 
                 // это примеры вопросов. Поэтому — набор строк, а не капитель.
                 <div className="flex flex-col items-center gap-1">
                   <p className="t-micro pb-1 text-ink-muted">Try</p>
-                  {ANSWER_FIXTURES.map((fixture) => (
+                  {SUGGESTED_QUESTIONS.map((question) => (
                     <button
-                      key={fixture.suggestion}
+                      key={question}
                       type="button"
                       className="cv-transition-fast t-body cursor-pointer border-b border-transparent px-1 text-accent-text hover:border-accent"
                       onClick={() => {
-                        conversation.ask(fixture.suggestion)
+                        conversation.ask(question)
                       }}
                     >
-                      {fixture.suggestion}
+                      {question}
                     </button>
                   ))}
                 </div>

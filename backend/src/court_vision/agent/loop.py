@@ -74,6 +74,9 @@ class ToolCalled:
     """Агент решил вызвать Инструмент. Отдаётся до выполнения: смысл события — показать,
     чем занят агент, пока ответа ещё нет."""
 
+    # Идентификатор вызова от провайдера: по нему клиент отличает два вызова одного и того
+    # же Инструмента друг от друга.
+    id: str
     name: str
     arguments: dict[str, Any] | None
 
@@ -151,7 +154,7 @@ async def stream_answer(
             return
 
         for call in reply.tool_calls:
-            yield ToolCalled(name=call.name, arguments=call.parsed_arguments())
+            yield ToolCalled(id=call.id, name=call.name, arguments=call.parsed_arguments())
             invocation = await _invoke(session_factory, call)
             invocations.append(invocation)
             messages.append(_tool_message(call, invocation.result))

@@ -1,7 +1,12 @@
-import { findFixture } from '@/features/chat/mock/fixtures'
+import { findFixture } from '@/features/chat/test/fixtures'
 import type { AnswerStream, StreamEvent } from '@/features/chat/model/types'
 
-/** Мок потока ответа: та же последовательность событий, что придёт из SSE в #8.
+/** Постановочный поток ответа — тестовый дубль SSE.
+ *
+ * Приложение ходит в настоящий эндпоинт; здесь остаётся то, ради чего дубль и нужен:
+ * последовательность событий, воспроизводимая без сети и без LLM. Формы событий — те же,
+ * что у настоящего потока, поэтому механика ленты (курсор печати, цитаты, повтор,
+ * обрыв) проверяется на них честно.
  *
  * Сначала Агент «вызывает» Инструменты (`tool_call`), затем отдаёт ответ токенами, а
  * цитата (`citation`) объявляется ровно в тот момент, когда в тексте встретился её
@@ -32,12 +37,12 @@ export function createMockAnswerStream(options: MockStreamOptions = {}): AnswerS
       yield {
         type: 'error',
         problem: {
-          type: 'urn:court-vision:problem:mock-fixture-missing',
-          title: 'No mock answer for this question',
+          type: 'urn:court-vision:problem:fixture-missing',
+          title: 'No scripted answer for this question',
           status: 501,
           // Ошибка говорит, что случилось и что делать (§7.2).
           detail:
-            'The chat runs on mock data until the streaming endpoint lands. Ask one of the suggested questions, or retry once the API is connected.',
+            'This scripted stream only answers the questions it has fixtures for. Ask one of those, or retry.',
           instance: '/api/v1/conversations/messages',
         },
       }

@@ -7,15 +7,10 @@
  * из SyntaxError, TypeError и статусов.
  */
 
-/** Тело ошибки RFC 9457; расширяющие члены (candidates, nearest, ...) — по ключу. */
-export interface Problem {
-  type: string
-  title: string
-  status: number
-  detail: string
-  instance: string
-  [extension: string]: unknown
-}
+import { sseJson } from '@/shared/api/sse'
+import type { Problem } from '@/shared/api/wire'
+
+export type { Problem }
 
 export class ApiError extends Error {
   readonly problem: Problem
@@ -37,19 +32,27 @@ export interface ApiClientOptions {
 
 export interface ApiClient {
   get<T>(path: string): Promise<T>
+  post<T>(path: string, body: unknown): Promise<T>
+  /** SSE-поток: события по мере поступления. Неуспешный ответ становится `ApiError` до
+   * первого события — отказ на входе (чужой Диалог, негодное тело) обязан быть отличим от
+   * ошибки внутри уже начавшегося потока.
+   *
+   * `signal` закрывает запрос: брошенный ответ иначе висит открытым до конца генерации на
+   * сервере, а генерацию за него всё равно кто-то платит. */
+  stream<EventT>(path: string, body: unknown, signal?: AbortSignal): AsyncIterable<EventT>
 }
 
 export function createApiClient({ baseUrl, getToken }: ApiClientOptions): ApiClient {
-  async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  async function send(path: string, init: RequestInit, accept: string): Promise<Response> {
     const token = await getToken()
-    const headers = new Headers(init?.headers)
+    const headers = new Headers(init.headers)
+    headers.set('Accept', accept)
     if (token !== null) {
       headers.set('Authorization', `Bearer ${token}`)
     }
 
-    let response: Response
     try {
-      response = await fetch(`${baseUrl}${path}`, { ...init, headers })
+      return await fetch(`${baseUrl}${path}`, { ...init, headers })
     } catch (cause) {
       throw new ApiError(
         {
@@ -62,6 +65,10 @@ export function createApiClient({ baseUrl, getToken }: ApiClientOptions): ApiCli
         { cause },
       )
     }
+  }
+
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await send(path, init, 'application/json')
 
     const body: unknown = await response
       .json()
@@ -76,8 +83,41 @@ export function createApiClient({ baseUrl, getToken }: ApiClientOptions): ApiCli
     return body as T
   }
 
+  function json(body: unknown): RequestInit {
+    return {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: { 'Content-Type': 'application/json' },
+    }
+  }
+
+  async function* stream<EventT>(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+  ): AsyncGenerator<EventT> {
+    const response = await send(
+      path,
+      { ...json(body), ...(signal !== undefined && { signal }) },
+      'text/event-stream',
+    )
+
+    if (!response.ok) {
+      const problem: unknown = await response.json().catch(() => undefined)
+      throw new ApiError(isProblem(problem) ? problem : syntheticProblem(response, path))
+    }
+    if (response.body === null) {
+      // Успешный ответ без тела — поток не начался, и ждать событий бессмысленно.
+      throw new ApiError(syntheticProblem(response, path))
+    }
+
+    yield* sseJson<EventT>(response.body)
+  }
+
   return {
     get: (path) => request(path),
+    post: (path, body) => request(path, json(body)),
+    stream,
   }
 }
 
