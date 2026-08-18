@@ -47,6 +47,24 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = BACKEND_ROOT / "tests" / "fixtures" / "dataset"
 
 
+@pytest.fixture(autouse=True)
+def _settings_ignore_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Настройки в тестах собираются только из явных аргументов.
+
+    Без этого `Settings(...)` дочитывает недостающие поля из корневого `.env` — то есть из
+    личной конфигурации того, кто запустил тесты. Прогон становится зависимым от чужой
+    машины: чей-то ключ провайдера или другая модель в `.env` меняют то, что проверяет тест,
+    а CI с пустым `.env` и локальный прогон расходятся в результатах.
+
+    Отсюда две подмены, а не одна: `.env` приезжает и напрямую (`env_file` настроек), и через
+    окружение — `import litellm` дёргает `load_dotenv()` и раскладывает тот же файл по
+    `os.environ`, откуда его читает уже переменная окружения, а не файл.
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
+
 @pytest.fixture(scope="session")
 def dataset_fixture_dir() -> Path:
     """Директория с маленькой копией датасета — её грузит тот же seed-код, что и боевые данные."""

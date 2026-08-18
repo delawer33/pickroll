@@ -87,6 +87,8 @@ async def stream(
     tools: list[dict[str, Any]],
     timeout: float,
     operation: str,
+    api_key: str | None = None,
+    api_base: str | None = None,
     trace_metadata: dict[str, Any] | None = None,
 ) -> AsyncGenerator[TextDelta | LlmReply]:
     """Один вызов модели потоком: сначала `TextDelta` по мере поступления, в конце — ровно
@@ -113,6 +115,10 @@ async def stream(
                 # None, а не пустой список: часть провайдеров отвергает пустой массив tools.
                 tools=tools or None,
                 timeout=timeout,
+                # None, а не пустая строка: так litellm возвращается к своему поиску ключа в
+                # окружении, а пустая строка ушла бы в заголовок авторизации как есть.
+                api_key=api_key or None,
+                api_base=api_base or None,
                 stream=True,
                 # Без этого блок usage в стриминге не приходит вовсе, и учёт получал бы нули
                 # на каждом вызове.

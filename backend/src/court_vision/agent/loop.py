@@ -177,6 +177,8 @@ def _step(
         messages=messages,
         tools=tool_registry.DEFINITIONS,
         timeout=settings.llm_timeout_seconds,
+        api_key=settings.llm_api_key,
+        api_base=settings.llm_api_base,
         operation=OPERATION,
         trace_metadata=trace_metadata,
     )

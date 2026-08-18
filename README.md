@@ -37,8 +37,8 @@ docker compose up --build
 Сквозной путь: вопрос на естественном языке → стриминговый ответ с цифрами из Postgres.
 
 1. **Ключи.** `cp .env.example .env` и заполнить: `CLERK_JWKS_URL` и
-   `VITE_CLERK_PUBLISHABLE_KEY` (Clerk Dashboard), `ANTHROPIC_API_KEY` — без него агент
-   отвечать не сможет. `LANGFUSE_*` необязательны: без них трейсинг просто не включается.
+   `VITE_CLERK_PUBLISHABLE_KEY` (Clerk Dashboard), `LLM_API_KEY` — без него агент отвечать не
+   сможет. `LANGFUSE_*` необязательны: без них трейсинг просто не включается.
 2. **Поднять систему.** `docker compose up --build` — Postgres, Redis, API, фронтенд.
 3. **Схема и данные.**
 
@@ -98,8 +98,11 @@ cd backend && uv run python -m court_vision.seed --source-dir tests/fixtures/dat
 ## LLM
 
 Провайдер задаётся строкой модели litellm в `LLM_MODEL` (`anthropic/claude-haiku-4-5`,
-`gemini/...`, `groq/...`) — смена провайдера не требует правок кода, только ключ в окружении
-(`ANTHROPIC_API_KEY` и аналоги). По [ADR-0001](docs/adr/0001-litellm-transport-own-agent-loop.md)
+`gemini/...`, `groq/...`) плюс `LLM_API_KEY` — смена провайдера не требует правок кода. Модель
+за OpenAI-совместимым шлюзом (свой прокси, OpenRouter, корпоративный шлюз) — это `openai/` в
+`LLM_MODEL` и адрес шлюза в `LLM_API_BASE`; учёт токенов при этом работает, стоимость — нет
+(прайслиста шлюза у litellm нет, см. [deferred.md](docs/deferred.md)).
+По [ADR-0001](docs/adr/0001-litellm-transport-own-agent-loop.md)
 litellm — только транспорт: агентный цикл, Инструменты и учёт стоимости написаны в
 `backend/src/court_vision/agent/`.
 

@@ -160,6 +160,45 @@ async def test_инструменты_объявлены_модели(
     assert "латиницей" in tools[0]["function"]["description"]
 
 
+async def test_адрес_и_ключ_шлюза_доезжают_до_провайдера(
+    session_factory: async_sessionmaker[AsyncSession],
+    provider: ProviderFactory,
+) -> None:
+    """Модель через OpenAI-совместимый шлюз — это `openai/` в строке модели плюс адрес.
+
+    Потеряется адрес — запрос уедет по адресу OpenAI по умолчанию, где этой модели нет, и
+    отвалится не на конфиге, а ошибкой провайдера на живом вопросе.
+    """
+    settings = Settings(
+        llm_model="openai/anthropic/claude-haiku-4.5",
+        llm_api_base="https://gateway.example/v1",
+        llm_api_key="sk-gateway",
+        llm_max_steps=3,
+    )
+    fake = provider(text_reply("Привет."))
+
+    await answer(session_factory, history=QUESTION, settings=settings)
+
+    assert fake.calls[0]["model"] == "openai/anthropic/claude-haiku-4.5"
+    assert fake.calls[0]["api_base"] == "https://gateway.example/v1"
+    assert fake.calls[0]["api_key"] == "sk-gateway"
+
+
+async def test_без_настроек_шлюза_провайдер_ищет_ключ_сам(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """None, а не пустая строка: по None litellm возвращается к своему поиску ключа в
+    окружении, а пустая строка уехала бы в заголовок авторизации как есть."""
+    fake = provider(text_reply("Привет."))
+
+    await answer(session_factory, history=QUESTION, settings=agent_settings)
+
+    assert fake.calls[0]["api_key"] is None
+    assert fake.calls[0]["api_base"] is None
+
+
 async def test_история_диалога_целиком_уезжает_модели(
     session_factory: async_sessionmaker[AsyncSession],
     agent_settings: Settings,
