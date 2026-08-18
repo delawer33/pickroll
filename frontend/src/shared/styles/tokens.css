@@ -1,0 +1,160 @@
+/* Дизайн-токены Court Vision — единственный источник правды по цвету, типографике,
+ * ритму и линейкам. Значения и обоснования: docs/design-system.md §4–5, наглядная
+ * реализация: docs/design/reference.html.
+ *
+ * Два уровня. Ramp (`--cv-slate-*`, `--cv-red-*`, `--cv-series-*`) — сырые ступени,
+ * роли (`--cv-paper`, `--cv-ink`, `--cv-accent`, ...) — семантика. Компоненты читают
+ * только роли: ступень или hex в компоненте — ошибка ревью. Тема переключается
+ * переопределением ramp, роли не дублируются.
+ */
+
+/* Светлая тема одновременно и значение по умолчанию, и явно выбираемая: без второго
+ * селектора узел с `data-theme="light"` не получал бы ramp вовсе, а наследовал бы
+ * текущую тему документа (её измеряет clerkAppearance.ts). */
+:root,
+[data-theme='light'] {
+  /* --- ramp: нейтраль Slate (светлая тема) --------------------------------- */
+  --cv-slate-1: #e8eaeb; /* плоскость страницы */
+  --cv-slate-2: #ffffff; /* поверхность листа */
+  --cv-slate-3: #f1f2f3; /* фон компонента */
+  --cv-slate-4: #e9ebec; /* hover */
+  --cv-slate-5: #dfe2e3; /* active / selected */
+  --cv-slate-6: #dfe3e5; /* линейка между строками */
+  --cv-slate-7: #b6bcbf; /* линейка вокруг блока */
+  --cv-slate-8: #101315; /* тяжёлая линейка 2px */
+  --cv-slate-11: #636a6e; /* текст низкого контраста */
+  --cv-slate-12: #101315; /* текст высокого контраста */
+  --cv-slate-sec: #3c4245; /* промежуточная ступень текста */
+  --cv-slate-over: #ffffff; /* поверхность оверлея */
+
+  /* --- ramp: акцент -------------------------------------------------------- */
+  --cv-red-accent: #cc2200; /* не-текст: фокус-ринг, индикатор роута, рамка */
+  --cv-red-solid: #cc2200; /* заливка кнопки */
+  --cv-red-on: #ffffff; /* текст на заливке, 5.53:1 */
+  --cv-red-text: #b81f00; /* ссылки и акцентный текст, 6.49:1 */
+
+  /* --- ramp: статусы (текстовые ступени, ≥4.5:1) --------------------------- */
+  --cv-status-good: #046904;
+  --cv-status-warning: #8a5a00;
+  --cv-status-critical: #b02020;
+
+  /* --- ramp: категориальная палитра, порядок из §6.3 ----------------------- */
+  --cv-series-1: #e8590c;
+  --cv-series-2: #1baf7a;
+  --cv-series-3: #2a78d6;
+  --cv-series-4: #eda100;
+  --cv-series-5: #e87ba4;
+  --cv-series-6: #008300;
+  --cv-series-7: #4a3aa7;
+  --cv-series-8: #e34948;
+  --cv-div-pos: #2a78d6;
+  --cv-div-neg: #e34948;
+}
+
+/* Роли и всё, что от них производно, объявляются на любом узле с темой, а не только
+ * на `:root`. Иначе роль вычислялась бы там, где объявлена, — то есть на документе, —
+ * и узел с чужой `data-theme` получал бы ступени текущей темы вместо своей. Ровно на
+ * этом стоит замер темы в clerkAppearance.ts. */
+:root,
+[data-theme] {
+  /* --- роли ---------------------------------------------------------------- */
+  --cv-paper: var(--cv-slate-1);
+  --cv-surface: var(--cv-slate-2);
+  --cv-overlay: var(--cv-slate-over);
+  --cv-fill: var(--cv-slate-3);
+  --cv-fill-hover: var(--cv-slate-4);
+  --cv-fill-active: var(--cv-slate-5);
+  --cv-ink: var(--cv-slate-12);
+  --cv-ink-secondary: var(--cv-slate-sec);
+  --cv-ink-muted: var(--cv-slate-11);
+  --cv-line: var(--cv-slate-7);
+  --cv-line-row: var(--cv-slate-6);
+  --cv-line-heavy: var(--cv-slate-8);
+  --cv-accent: var(--cv-red-accent);
+  --cv-accent-solid: var(--cv-red-solid);
+  --cv-accent-on: var(--cv-red-on);
+  --cv-accent-text: var(--cv-red-text);
+  --cv-good: var(--cv-status-good);
+  --cv-warning: var(--cv-status-warning);
+  --cv-critical: var(--cv-status-critical);
+
+  /* --- линейки: рулёж параметризован и обратим одним токеном --------------- */
+  --cv-rule-heavy: 2px solid var(--cv-line-heavy);
+  --cv-rule: 1px solid var(--cv-line);
+  --cv-rule-row: 1px solid var(--cv-line-row);
+  --cv-rule-v: 1px solid var(--cv-line-row);
+
+  /* --- типографика --------------------------------------------------------- */
+  --cv-font: 'Archivo Variable', system-ui, sans-serif;
+  --cv-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* --- слои над страницей: единственное место, где есть тень --------------- */
+  --cv-shadow-overlay:
+    0 1px 2px rgba(16, 19, 21, 0.07), 0 8px 24px -6px rgba(16, 19, 21, 0.15);
+  --cv-shadow-dialog:
+    0 2px 4px rgba(16, 19, 21, 0.09), 0 24px 48px -12px rgba(16, 19, 21, 0.24);
+
+  /* --- движение ------------------------------------------------------------ */
+  --cv-motion-instant: 0ms;
+  --cv-motion-fast: 110ms ease-out;
+  --cv-motion-enter: 170ms cubic-bezier(0.2, 0.8, 0.25, 1);
+  --cv-motion-panel: 260ms cubic-bezier(0.2, 0.8, 0.25, 1);
+
+  /* --- размеры каркаса ----------------------------------------------------- */
+  --cv-row: 34px;
+  --cv-row-compact: 28px;
+  --cv-control-sm: 26px;
+  --cv-control-md: 30px;
+  --cv-control-lg: 38px;
+  --cv-rail: 240px;
+  --cv-rail-collapsed: 56px;
+  --cv-topbar: 46px;
+  --cv-content: 1120px;
+}
+
+/* Тёмная тема Night — выбранные ступени, а не инверсия. Переопределяется только
+ * ramp: роли выше продолжают указывать на те же имена. */
+[data-theme='dark'] {
+  --cv-slate-1: #0f1113;
+  --cv-slate-2: #15171a;
+  --cv-slate-3: #1c1f23;
+  --cv-slate-4: #22262a;
+  --cv-slate-5: #292e33;
+  --cv-slate-6: #23272b;
+  --cv-slate-7: #363c41;
+  --cv-slate-8: #e8eaeb;
+  --cv-slate-11: #848c91;
+  --cv-slate-12: #eef0f1;
+  --cv-slate-sec: #bcc2c6;
+  --cv-slate-over: #1b1e22;
+
+  --cv-red-accent: #ff4a26;
+  --cv-red-text: #ff6a4a;
+
+  --cv-status-good: #5fd45f;
+  --cv-status-warning: #f0b429;
+  --cv-status-critical: #f07070;
+
+  --cv-series-2: #199e70;
+  --cv-series-3: #3987e5;
+  --cv-series-4: #c98500;
+  --cv-series-5: #d55181;
+  --cv-series-7: #9085e9;
+  --cv-series-8: #e66767;
+  --cv-div-pos: #3987e5;
+  --cv-div-neg: #e66767;
+
+  --cv-shadow-overlay: 0 1px 2px rgba(0, 0, 0, 0.55), 0 8px 24px -6px rgba(0, 0, 0, 0.6);
+  --cv-shadow-dialog: 0 2px 4px rgba(0, 0, 0, 0.55), 0 24px 48px -12px rgba(0, 0, 0, 0.65);
+}
+
+/* Приложение — не презентация: под reduce всё движение сводится к 0ms, курсор
+ * печати становится статичным (правило живёт в самом курсоре). */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-theme] {
+    --cv-motion-fast: 0ms;
+    --cv-motion-enter: 0ms;
+    --cv-motion-panel: 0ms;
+  }
+}

@@ -1,0 +1,53 @@
+/* Движение (docs/design-system.md §5.7).
+ *
+ * Токены хранят длительность вместе с кривой — как их и задаёт направление, — поэтому
+ * применяются шорткатом `transition`, а не через `duration-*`/`ease-*` по отдельности.
+ * `prefers-reduced-motion` уважается на уровне самих токенов: там всё становится 0ms.
+ */
+
+@layer components {
+  /* hover, цвет, границы */
+  .cv-transition-fast {
+    transition:
+      background-color var(--cv-motion-fast),
+      border-color var(--cv-motion-fast),
+      color var(--cv-motion-fast),
+      box-shadow var(--cv-motion-fast);
+  }
+
+  /* сообщение в ленте, тост: появление объясняет связь с источником */
+  .cv-enter {
+    animation: cv-enter var(--cv-motion-enter) both;
+  }
+
+  @keyframes cv-enter {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  /* Курсор печати — единственный бесконечный цикл в приложении (§5.7). Под
+     `prefers-reduced-motion` он остаётся, но перестаёт мигать. */
+  .cv-cursor {
+    animation: cv-blink 1.1s steps(2, start) infinite;
+  }
+
+  @keyframes cv-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .cv-cursor,
+    .cv-enter {
+      animation: none;
+    }
+  }
+
+  /* боковая панель, свёртывание рейки */
+  .cv-transition-panel {
+    transition: width var(--cv-motion-panel);
+  }
+}

@@ -4,7 +4,8 @@ AI-ассистент баскетбольного скаута: отвечае�
 из реальных box scores, а не из памяти модели.
 
 Продуктовая спека — [spec.md](spec.md), глоссарий — [CONTEXT.md](CONTEXT.md), архитектура —
-[docs/architecture.md](docs/architecture.md), конвенции кода — [docs/conventions.md](docs/conventions.md).
+[docs/architecture.md](docs/architecture.md), конвенции кода — [docs/conventions.md](docs/conventions.md),
+визуальный язык — [docs/design-system.md](docs/design-system.md).
 
 ## Состав репозитория
 
@@ -30,6 +31,10 @@ docker compose up --build
 
 - API — http://localhost:8000 (health-проба: `GET /health`, OpenAPI: `/docs`)
 - Frontend — http://localhost:5173
+
+Страница Диалога пока работает на моках: настоящий SSE-эндпоинт приезжает отдельным срезом.
+Отвечаются вопросы, предложенные на пустом экране (и любые, где встретилось имя из них), —
+остальные честно доходят до состояния ошибки с повтором.
 
 ## Данные
 

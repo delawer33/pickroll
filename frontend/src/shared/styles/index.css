@@ -1,63 +1,46 @@
-/* Дизайн-токены: минимальное ядро для среза auth; полная система (палитра, сетка,
-   типографика, Tailwind) приезжает в срезе #6. CSS-переменные — единственный источник
-   правды: компоненты Clerk читают их через clerkAppearance.ts. */
-:root {
-  --cv-color-bg: #faf9f7;
-  --cv-color-surface: #ffffff;
-  --cv-color-text: #1c1917;
-  --cv-color-text-muted: #6b6560;
-  --cv-color-border: #e7e2dc;
-  --cv-color-accent: #e8590c;
-  --cv-radius: 8px;
-  --cv-font-sans:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    sans-serif;
-}
+/* Точка входа стилей. Порядок важен: сначала Tailwind (он объявляет слои), затем
+ * токены и их проброс в утилиты, затем типографическая шкала и база.
+ *
+ * Archivo самохостится через fontsource, вариант `wdth` — ось ширины заменяет второе
+ * семейство (docs/design-system.md §5.4). Браузер скачивает только тот subset, чей
+ * unicode-range встретился на странице, поэтому лишних байтов от нелатинских наборов
+ * нет. Обращений к CDN нет ни одного.
+ */
+@import 'tailwindcss';
+@import '@fontsource-variable/archivo/wdth.css';
 
-* {
-  box-sizing: border-box;
-}
+@import './tokens.css';
+@import './theme.css';
+@import './type.css';
+@import './motion.css';
 
-body {
-  margin: 0;
-  font-family: var(--cv-font-sans);
-  color: var(--cv-color-text);
-  background: var(--cv-color-bg);
-}
+@layer base {
+  html {
+    /* Плоскость страницы должна доходить до края при overscroll. */
+    background: var(--cv-paper);
+  }
 
-.app-shell {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+  body {
+    margin: 0;
+    background: var(--cv-paper);
+    color: var(--cv-ink);
+    font-family: var(--cv-font);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
 
-.app-shell__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem;
-  border-bottom: 1px solid var(--cv-color-border);
-  background: var(--cv-color-surface);
-}
+  /* Фокус никогда не рисуется границей: линейки дают 1.6–2.1:1, этого хватает
+     разделителю и не хватает фокусу (§5.2). */
+  :where(a, button, input, textarea, select, [tabindex]):focus-visible {
+    outline: 2px solid var(--cv-accent);
+    outline-offset: 2px;
+  }
 
-.app-shell__brand {
-  font-weight: 600;
-}
-
-.app-shell__main {
-  flex: 1;
-  padding: 1rem;
-}
-
-.app-shell__loading {
-  color: var(--cv-color-text-muted);
-}
-
-/* Форма входа Clerk по центру свободной области. */
-.app-shell__sign-in {
-  display: flex;
-  justify-content: center;
-  padding-top: 10vh;
+  /* Радиуса у направления нет: сбрасываем то, что браузер добавляет сам. */
+  :where(button, input, textarea, select) {
+    border-radius: 0;
+    font: inherit;
+    color: inherit;
+  }
 }

@@ -1,10 +1,10 @@
-import { ClerkProvider } from '@clerk/clerk-react'
+import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-import { App } from '@/app/App'
+import { Providers } from '@/app/Providers'
+import { router } from '@/app/router'
 import '@/shared/styles/index.css'
-import { clerkAppearance } from '@/shared/styles/clerkAppearance'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) {
@@ -24,8 +24,8 @@ if (!publishableKey) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ClerkProvider publishableKey={publishableKey} appearance={clerkAppearance()}>
-      <App />
-    </ClerkProvider>
+    <Providers publishableKey={publishableKey}>
+      <RouterProvider router={router} />
+    </Providers>
   </StrictMode>,
 )

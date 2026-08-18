@@ -1,0 +1,86 @@
+/* Проброс ролей в утилиты Tailwind (docs/design-system.md §4).
+ *
+ * `@theme inline` обязателен: утилита компилируется в `var(--cv-surface)`, а не в
+ * скопированное значение, поэтому `bg-surface` продолжает следовать теме при смене
+ * `data-theme`. Итог — `bg-surface` и `var(--cv-surface)` одно и то же по определению.
+ *
+ * Namespace'ы, которых у направления нет (радиус, тени на контенте, произвольные
+ * кегли), обнуляются через `*: initial`: `rounded-md`, `shadow-lg` и `text-sm` просто
+ * перестают существовать. Кегль берётся из типографической шкалы (type.css), радиуса
+ * нет, тень бывает только у слоёв над страницей.
+ */
+
+@theme inline {
+  /* --- цвет: только роли -------------------------------------------------- */
+  --color-paper: var(--cv-paper);
+  --color-surface: var(--cv-surface);
+  --color-overlay: var(--cv-overlay);
+  --color-fill: var(--cv-fill);
+  --color-fill-hover: var(--cv-fill-hover);
+  --color-fill-active: var(--cv-fill-active);
+  --color-ink: var(--cv-ink);
+  --color-ink-secondary: var(--cv-ink-secondary);
+  --color-ink-muted: var(--cv-ink-muted);
+  --color-line: var(--cv-line);
+  --color-line-row: var(--cv-line-row);
+  --color-line-heavy: var(--cv-line-heavy);
+  --color-accent: var(--cv-accent);
+  --color-accent-solid: var(--cv-accent-solid);
+  --color-accent-on: var(--cv-accent-on);
+  --color-accent-text: var(--cv-accent-text);
+  --color-good: var(--cv-good);
+  --color-warning: var(--cv-warning);
+  --color-critical: var(--cv-critical);
+  --color-series-1: var(--cv-series-1);
+  --color-series-2: var(--cv-series-2);
+  --color-series-3: var(--cv-series-3);
+  --color-series-4: var(--cv-series-4);
+  --color-series-5: var(--cv-series-5);
+  --color-series-6: var(--cv-series-6);
+  --color-series-7: var(--cv-series-7);
+  --color-series-8: var(--cv-series-8);
+  --color-div-pos: var(--cv-div-pos);
+  --color-div-neg: var(--cv-div-neg);
+
+  --font-sans: var(--cv-font);
+  --font-mono: var(--cv-font-mono);
+
+  /* --- ритм: шаг 4px, промежуточных значений нет -------------------------- */
+  --spacing: initial;
+  --spacing-0: 0px;
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-20: 80px;
+
+  /* --- размеры каркаса ----------------------------------------------------- */
+  --spacing-row: var(--cv-row);
+  --spacing-row-compact: var(--cv-row-compact);
+  --spacing-control-sm: var(--cv-control-sm);
+  --spacing-control-md: var(--cv-control-md);
+  --spacing-control-lg: var(--cv-control-lg);
+  --spacing-rail: var(--cv-rail);
+  --spacing-rail-collapsed: var(--cv-rail-collapsed);
+  --spacing-topbar: var(--cv-topbar);
+  --spacing-content: var(--cv-content);
+  --spacing-read: 68ch;
+
+  /* Структурная граница каркаса: ниже неё левая рейка уходит в drawer, а Worktable
+     складывается в одну колонку (§7.2, §8). Одна на оба решения — это одно и то же
+     «места на две панели больше нет». */
+  --breakpoint-shell: 900px;
+
+  --radius-*: initial;
+  --text-*: initial;
+
+  --shadow-*: initial;
+  --shadow-overlay: var(--cv-shadow-overlay);
+  --shadow-dialog: var(--cv-shadow-dialog);
+}

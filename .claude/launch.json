@@ -2,15 +2,15 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "frontend",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--dir", "frontend", "dev", "--port", "5199", "--strictPort"],
+      "port": 5199
+    },
+    {
       "name": "design-reference",
       "runtimeExecutable": "python3",
-      "runtimeArgs": [
-        "-m",
-        "http.server",
-        "8903",
-        "--directory",
-        "docs/design"
-      ],
+      "runtimeArgs": ["-m", "http.server", "8903", "--directory", "docs/design"],
       "port": 8903
     }
   ]
