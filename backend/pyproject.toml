@@ -23,6 +23,11 @@ dependencies = [
     # заданных ключах — см. `observability.py`.
     "langfuse>=4",
     "sse-starlette>=2.1",
+    # Корпус: pgvector — тип колонки эмбеддингов, pypdf — извлечение текста правил из PDF,
+    # httpx — выгрузка rulebook и Wikipedia (в dev он уже есть для тестов).
+    "pgvector>=0.3",
+    "pypdf>=5.1",
+    "httpx>=0.28",
     "opentelemetry-sdk>=1.30",
     "opentelemetry-exporter-otlp-proto-http>=1.30",
 ]

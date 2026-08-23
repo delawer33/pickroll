@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     # Инструмента, самокоррекцию по кандидатам и ответ; дальше цикл почти наверняка зациклился.
     llm_max_steps: int = 6
 
+    # Эмбеддер корпуса — тоже строка litellm; по умолчанию gemini-embedding через
+    # OpenAI-совместимый шлюз (`llm_api_base`). Размерность согласована с колонкой
+    # vector(768): её смена — новая миграция и переиндексация, а не правка env.
+    embedding_model: str = "openai/google/gemini-embedding-001"
+    embedding_dimensions: int = 768
+
     # Langfuse: без ключей трейсинг просто не включается (см. `observability.py`) — локальная
     # разработка не должна требовать внешнего сервиса. Хост пуст = облако Langfuse.
     langfuse_public_key: str = ""

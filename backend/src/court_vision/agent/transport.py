@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import aclosing
 from dataclasses import dataclass
 from decimal import Decimal
@@ -167,6 +167,79 @@ async def stream(
             operation=operation,
             started=started,
         )
+
+
+# Потолок текстов в одном вызове эмбеддера: у провайдеров свои лимиты на размер батча
+# (у OpenAI-совместимых обычно ≥ 2048 входов, у шлюзов бывает меньше), сотня — безопасно
+# и достаточно крупно, чтобы не платить латентностью за каждый чанк.
+_EMBED_BATCH_SIZE = 100
+
+
+async def embed(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    model: str,
+    texts: Sequence[str],
+    dimensions: int,
+    timeout: float,
+    operation: str,
+    api_key: str | None = None,
+    api_base: str | None = None,
+) -> list[list[float]]:
+    """Эмбеддинги батчами через ту же границу litellm и с тем же учётом, что и `stream`.
+
+    Порядок результата совпадает с порядком `texts`. Каждый вызов провайдера пишет свою
+    строку в llm_usage (operation например "corpus.embed") — по тем же правилам: строка
+    обязана появиться на каждый оплаченный вызов, даже упавший после оплаты.
+    """
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), _EMBED_BATCH_SIZE):
+        batch = list(texts[start : start + _EMBED_BATCH_SIZE])
+        started = perf_counter()
+        response: Any | None = None
+        try:
+            try:
+                response = await litellm.aembedding(
+                    model=model,
+                    input=batch,
+                    dimensions=dimensions,
+                    timeout=timeout,
+                    # См. `stream`: None вместо пустых строк.
+                    api_key=api_key or None,
+                    api_base=api_base or None,
+                )
+            except Exception as error:
+                # Широкий except по той же причине, что в `stream`: иерархия исключений
+                # принадлежит litellm и меняется от версии к версии.
+                log.exception("llm.embed_failed", model=model, operation=operation)
+                cause = type(error).__name__
+                if isinstance(error, _REJECTION_ERRORS):
+                    raise ProviderRequestRejected(model, cause) from error
+                raise ProviderUnavailable(model, cause) from error
+            vectors.extend(_embedding_vectors(response, model=model, expected=len(batch)))
+        finally:
+            await _account(
+                session_factory, response, model=model, operation=operation, started=started
+            )
+    return vectors
+
+
+def _embedding_vectors(response: Any, *, model: str, expected: int) -> list[list[float]]:
+    """Векторы из ответа в порядке входных текстов.
+
+    Провайдер не обязан сохранять порядок — сортируем по `index`. Недостача вектора —
+    негодный ответ, как пустой поток в `stream`: молча вернуть меньше значило бы
+    рассинхронизировать векторы с чанками у вызывающей стороны.
+    """
+    data = list(getattr(response, "data", None) or [])
+    if len(data) != expected:
+        raise ProviderUnavailable(model, "EmbeddingCountMismatch")
+
+    def _field(item: Any, name: str, default: Any) -> Any:
+        return item.get(name, default) if isinstance(item, dict) else getattr(item, name, default)
+
+    ordered = sorted(data, key=lambda item: int(_field(item, "index", 0)))
+    return [[float(value) for value in _field(item, "embedding", [])] for item in ordered]
 
 
 async def _account(
