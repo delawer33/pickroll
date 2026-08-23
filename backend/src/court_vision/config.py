@@ -56,6 +56,13 @@ class Settings(BaseSettings):
     embedding_model: str = "openai/google/gemini-embedding-001"
     embedding_dimensions: int = 768
 
+    # Реранкер — выключаемая ступень поиска по корпусу: пустой ключ = выдача в порядке
+    # RRF-слияния, без внешнего вызова (контракт задокументирован в .env.example).
+    rerank_api_key: str | None = None
+    rerank_model: str = "jina_ai/jina-reranker-v2-base-multilingual"
+    # Сколько чанков уезжает вызывающей стороне после поиска (и реранка, если он включён).
+    rag_top_k: int = 8
+
     # Langfuse: без ключей трейсинг просто не включается (см. `observability.py`) — локальная
     # разработка не должна требовать внешнего сервиса. Хост пуст = облако Langfuse.
     langfuse_public_key: str = ""
