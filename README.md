@@ -32,9 +32,37 @@ docker compose up --build
 - API — http://localhost:8000 (health-проба: `GET /health`, OpenAPI: `/docs`)
 - Frontend — http://localhost:5173
 
-Страница Диалога пока работает на моках: настоящий SSE-эндпоинт приезжает отдельным срезом.
-Отвечаются вопросы, предложенные на пустом экране (и любые, где встретилось имя из них), —
-остальные честно доходят до состояния ошибки с повтором.
+## Демо-сценарий
+
+Сквозной путь: вопрос на естественном языке → стриминговый ответ с цифрами из Postgres.
+
+1. **Ключи.** `cp .env.example .env` и заполнить: `CLERK_JWKS_URL` и
+   `VITE_CLERK_PUBLISHABLE_KEY` (Clerk Dashboard), `LLM_API_KEY` — без него агент отвечать не
+   сможет. `LANGFUSE_*` необязательны: без них трейсинг просто не включается.
+2. **Поднять систему.** `docker compose up --build` — Postgres, Redis, API, фронтенд.
+3. **Схема и данные.**
+
+   ```bash
+   docker compose exec api alembic upgrade head
+   docker compose exec api python -m court_vision.seed
+   ```
+
+   Полный seed качает датасет Kaggle (~29 тыс. матчей, ~650 тыс. строк Box Score) — это
+   несколько минут. Для быстрого прогона хватит тестовой фикстуры:
+   `docker compose exec api python -m court_vision.seed --source-dir tests/fixtures/dataset`.
+4. **Войти.** http://localhost:5173 → Clerk. Всё под `/api/v1` требует токена, Диалог
+   принадлежит вошедшему пользователю: чужой не откроется даже по прямой ссылке.
+5. **Спросить.** На пустом экране — предложенные вопросы, например «How many points did
+   LeBron James average in 2012-13?». В ответе: карточка вызванного Инструмента с
+   аргументами в рейке Evidence справа, затем текст, приезжающий токенами.
+6. **Проверить цифры.** 26.8 очка за игру — это агрегат по строкам Box Score, а не память
+   модели: тот же ответ отдаёт `GET /api/v1/players/stats?player_name=LeBron%20James&season=2012-13`.
+7. **Перезагрузить страницу.** Диалог на месте: он в истории в левой рейке вместе с
+   заголовком из первого вопроса. Follow-up «А в 2015-16?» работает без имени игрока —
+   агент получает переписку целиком.
+
+Если ключа провайдера нет или он не отвечает, поток не обрывается: в ленте появляется
+состояние ошибки с причиной и кнопкой повтора.
 
 ## Данные
 
@@ -70,8 +98,11 @@ cd backend && uv run python -m court_vision.seed --source-dir tests/fixtures/dat
 ## LLM
 
 Провайдер задаётся строкой модели litellm в `LLM_MODEL` (`anthropic/claude-haiku-4-5`,
-`gemini/...`, `groq/...`) — смена провайдера не требует правок кода, только ключ в окружении
-(`ANTHROPIC_API_KEY` и аналоги). По [ADR-0001](docs/adr/0001-litellm-transport-own-agent-loop.md)
+`gemini/...`, `groq/...`) плюс `LLM_API_KEY` — смена провайдера не требует правок кода. Модель
+за OpenAI-совместимым шлюзом (свой прокси, OpenRouter, корпоративный шлюз) — это `openai/` в
+`LLM_MODEL` и адрес шлюза в `LLM_API_BASE`; учёт токенов при этом работает, стоимость — нет
+(прайслиста шлюза у litellm нет, см. [deferred.md](docs/deferred.md)).
+По [ADR-0001](docs/adr/0001-litellm-transport-own-agent-loop.md)
 litellm — только транспорт: агентный цикл, Инструменты и учёт стоимости написаны в
 `backend/src/court_vision/agent/`.
 
@@ -79,6 +110,15 @@ litellm — только транспорт: агентный цикл, Инст
 в диффе PR, а не прячется в коде.
 
 Каждый вызов модели пишет строку в таблицу `llm_usage`: токены, стоимость, латентность.
+
+Ответ приезжает потоком: `POST /api/v1/conversations/{id}/messages` отдаёт SSE, в `data`
+каждого события — объект с полем `type` (`token`, `tool_call`, `citation`, `done`, `error`).
+Типы событий описаны моделями в OpenAPI, TS-типы фронтенда генерируются из него. Ошибка
+провайдера приходит событием `error` с телом RFC 9457, а не обрывом соединения.
+
+Трейсы агентного цикла уходят в Langfuse, если заданы `LANGFUSE_PUBLIC_KEY` и
+`LANGFUSE_SECRET_KEY`; без них трейсинг не включается и локальная разработка не требует
+внешнего сервиса. Ходы одного Диалога собираются в Langfuse в одну сессию.
 
 ## Разработка
 
@@ -98,6 +138,14 @@ cd frontend
 pnpm install
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test
+```
+
+TS-типы контракта API генерируются из OpenAPI и лежат в git
+(`frontend/src/shared/api/schema.d.ts`) — руками они не пишутся. После правки схем на
+бэкенде:
+
+```bash
+cd frontend && pnpm api:types
 ```
 
 Хуки pre-commit (используют те же конфиги, что и CI):

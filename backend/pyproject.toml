@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Court Vision — AI-ассистент баскетбольного скаута"
 requires-python = ">=3.13"
 dependencies = [
-    "fastapi>=0.115",
+    # 0.141 — граница по родному SSE (`fastapi.sse`): кодирование фреймов, keepalive и
+    # описание потока в OpenAPI берутся из фреймворка, а не пишутся руками.
+    "fastapi>=0.141",
     "uvicorn[standard]>=0.34",
     "pydantic>=2.10",
     "pydantic-settings>=2.7",
@@ -15,6 +17,14 @@ dependencies = [
     "greenlet>=3.5.5",
     "pyjwt[crypto]>=2.10",
     "litellm>=1.63",
+    # Трейсы уходят колбэком litellm `langfuse_otel` — по OTLP, мимо самого SDK. Пакет всё
+    # равно в зависимостях: он приносит opentelemetry-экспортёр, которым этот колбэк и
+    # пишет (у litellm otel лежит в extra `proxy-runtime`). Включается только при
+    # заданных ключах — см. `observability.py`.
+    "langfuse>=4",
+    "sse-starlette>=2.1",
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
 ]
 
 [dependency-groups]

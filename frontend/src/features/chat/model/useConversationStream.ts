@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { mockAnswerStream } from '@/features/chat/mock/mockStream'
 import type {
   AgentMessage,
   AnswerStream,
@@ -10,8 +9,9 @@ import type {
 } from '@/features/chat/model/types'
 
 export interface UseConversationStreamOptions {
-  /** Источник потока. По умолчанию мок; в #8 сюда придёт SSE-клиент. */
-  stream?: AnswerStream
+  /** Источник потока: за ним SSE-эндпоинт Диалога. Значения по умолчанию нет намеренно —
+   * лента без источника событий не имеет смысла, а мок бы её тихо подменял. */
+  stream: AnswerStream
   /** Уже сохранённая часть Диалога (пришла из API до монтирования). */
   initialMessages?: Message[]
   initialToolCalls?: ToolCall[]
@@ -31,13 +31,13 @@ export interface ConversationStream {
 /** Состояние Диалога, собираемое из потока событий.
  *
  * Единственное место, которое знает, как события превращаются в сообщения: компоненты
- * получают готовую ленту. Когда мок сменится на SSE, поменяется только `stream`.
+ * получают готовую ленту, а транспорт — целиком за `stream`.
  */
 export function useConversationStream({
-  stream = mockAnswerStream,
+  stream,
   initialMessages = [],
   initialToolCalls = [],
-}: UseConversationStreamOptions = {}): ConversationStream {
+}: UseConversationStreamOptions): ConversationStream {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [toolCalls, setToolCalls] = useState<ToolCall[]>(initialToolCalls)
   const [streaming, setStreaming] = useState(false)
@@ -46,9 +46,13 @@ export function useConversationStream({
   // его события перестают применяться. Без этого ответ на отменённый вопрос дописывался
   // бы в ленту поверх нового.
   const runRef = useRef(0)
+  // Отмена самого запроса, а не только его событий: без неё брошенный поток остаётся
+  // висеть на чтении тела, и POST живёт до конца генерации на сервере.
+  const abortRef = useRef<AbortController | null>(null)
   useEffect(
     () => () => {
       runRef.current += 1
+      abortRef.current?.abort()
     },
     [],
   )
@@ -57,7 +61,9 @@ export function useConversationStream({
     if (event.type === 'tool_call') {
       const { toolCall } = event
       setToolCalls((previous) =>
-        previous.some((existing) => existing.id === toolCall.id) ? previous : [...previous, toolCall],
+        previous.some((existing) => existing.id === toolCall.id)
+          ? previous
+          : [...previous, toolCall],
       )
       return
     }
@@ -89,6 +95,9 @@ export function useConversationStream({
     async (question: string, { replaces }: { replaces?: string } = {}) => {
       runRef.current += 1
       const run = runRef.current
+      abortRef.current?.abort()
+      const abort = new AbortController()
+      abortRef.current = abort
       const agentMessageId = `agent-${String(run)}`
       const agentMessage: AgentMessage = {
         id: agentMessageId,
@@ -108,30 +117,30 @@ export function useConversationStream({
       )
 
       try {
-        for await (const event of stream(question)) {
+        let terminated = false
+        for await (const event of stream(question, { signal: abort.signal })) {
           if (runRef.current !== run) {
             return
           }
+          terminated = event.type === 'done' || event.type === 'error'
           applyEvent(event, agentMessageId)
+        }
+        if (!terminated && runRef.current === run) {
+          // Поток закончился, не сказав ни `done`, ни `error` — так выглядит таймаут прокси
+          // или упавший процесс. Без этой ветки курсор печати остался бы навсегда: лента
+          // считала бы, что ответ ещё идёт, а повторить его было бы нечем.
+          applyEvent(interrupted('The answer stream ended without finishing.'), agentMessageId)
         }
       } catch (cause) {
         // Транспорт может не дойти до события `error` — оборваться. Для ленты это тот
         // же исход: ошибка с объяснением и повтором, а не вечный курсор печати.
         if (runRef.current === run) {
           applyEvent(
-            {
-              type: 'error',
-              problem: {
-                type: 'urn:court-vision:problem:stream-interrupted',
-                title: 'The answer stream stopped',
-                status: 0,
-                detail:
-                  cause instanceof Error
-                    ? cause.message
-                    : 'The connection to the Agent dropped mid-answer. Retry to ask again.',
-                instance: '/api/v1/conversations/messages',
-              },
-            },
+            interrupted(
+              cause instanceof Error
+                ? cause.message
+                : 'The connection to the Agent dropped mid-answer. Retry to ask again.',
+            ),
             agentMessageId,
           )
         }
@@ -173,4 +182,19 @@ export function useConversationStream({
   )
 
   return { messages, toolCalls, streaming, ask, retry }
+}
+
+/** Оборванный поток как событие ленты: у него тот же исход, что у события `error` от
+ * бэкенда, — объяснение и кнопка повтора. */
+function interrupted(detail: string): StreamEvent {
+  return {
+    type: 'error',
+    problem: {
+      type: 'urn:court-vision:problem:stream-interrupted',
+      title: 'The answer stream stopped',
+      status: 0,
+      detail,
+      instance: '/api/v1/conversations/messages',
+    },
+  }
 }

@@ -46,3 +46,17 @@ async def get_session(request: Request) -> AsyncIterator[AsyncSession]:
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+
+def get_session_factory(request: Request) -> async_sessionmaker[AsyncSession]:
+    """Фабрика сессий для работы, которая не укладывается в транзакцию запроса.
+
+    Нужна стримингу: тело SSE-ответа генерируется уже после того, как обработчик вернул
+    ответ, и транзакция запроса всё это время висела бы открытой, занимая соединение пула
+    ровно столько, сколько отвечает LLM. Такая работа нарезает себе короткие транзакции сама.
+    """
+    factory: async_sessionmaker[AsyncSession] = request.app.state.session_factory
+    return factory
+
+
+SessionFactoryDep = Annotated[async_sessionmaker[AsyncSession], Depends(get_session_factory)]

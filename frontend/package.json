@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "api:types": "cd ../backend && uv run python scripts/dump_openapi.py | pnpm --dir ../frontend exec openapi-typescript -o src/shared/api/schema.d.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -47,6 +48,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.18",
     "jsdom": "^26.0.0",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.4.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.7.3",

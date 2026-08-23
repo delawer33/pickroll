@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { listConversations } from '@/features/chat/mock/mockApi'
+import { listConversations } from '@/features/chat/api/conversations'
+import { formatWhen } from '@/features/chat/model/formatWhen'
+import { useApiClient } from '@/shared/api/useApiClient'
 import { NavItem } from '@/shared/ui/NavItem'
 import { Skeleton } from '@/shared/ui/Skeleton'
 
@@ -11,7 +13,11 @@ export interface RecentConversationsProps {
 /** История Диалогов в левой рейке. Живёт в фиче, а не в каркасе: каркас не должен
  * знать ни про Диалог, ни про то, откуда он берётся (docs/design-system.md §9). */
 export function RecentConversations({ onNavigate }: RecentConversationsProps) {
-  const conversations = useQuery({ queryKey: ['conversations'], queryFn: listConversations })
+  const client = useApiClient()
+  const conversations = useQuery({
+    queryKey: ['conversations'],
+    queryFn: () => listConversations(client),
+  })
 
   if (conversations.isPending) {
     return (
@@ -52,7 +58,7 @@ export function RecentConversations({ onNavigate }: RecentConversationsProps) {
         >
           <span className="flex min-w-0 flex-col">
             <span className="truncate">{conversation.title}</span>
-            <span className="t-micro text-ink-muted">{conversation.when}</span>
+            <span className="t-micro text-ink-muted">{formatWhen(conversation.createdAt)}</span>
           </span>
         </NavItem>
       ))}

@@ -1,12 +1,15 @@
 import type { Citation, ToolCall } from '@/features/chat/model/types'
 
-/** Мок-ответы Агента до появления настоящего SSE (#8).
+/** Ответы Агента для тестов ленты и карточек Evidence.
  *
- * Числа и имена настоящие — заглушки «Lorem» и «Feature 1» запрещены (§3): мок должен
- * выглядеть ровно так, как будет выглядеть продукт, иначе вёрстка проверяется не на том.
+ * Числа и имена настоящие — заглушки «Lorem» и «Feature 1» запрещены (§3): фикстура должна
+ * выглядеть ровно так, как выглядит продукт, иначе вёрстка проверяется не на том. Здесь же
+ * лежат разнородные результаты Инструментов (таблица, динамика, перцентили, цитата),
+ * которых поток спринта 1 ещё не присылает: рейка Evidence обязана их держать к спринтам
+ * 2-3, и проверяется это на них.
  *
  * Фикстура выбирается по ключевым словам вопроса. Вопрос без фикстуры — не «пусто», а
- * ошибка потока: так состояние ошибки достижимо руками, без искусственного тумблера.
+ * ошибка потока: так состояние ошибки достижимо без искусственного тумблера.
  */
 
 export interface AnswerFixture {
@@ -219,26 +222,4 @@ export function findFixture(question: string): AnswerFixture | undefined {
   return ANSWER_FIXTURES.find((fixture) =>
     fixture.keywords.some((keyword) => normalized.includes(keyword)),
   )
-}
-
-/** Диалоги в левой рейке: до персистентности (#8) история тоже мок. */
-export interface ConversationSummary {
-  id: string
-  title: string
-  when: string
-}
-
-export const MOCK_CONVERSATIONS: ConversationSummary[] = [
-  { id: 'curry-lillard', title: 'Curry vs Lillard as shooters', when: 'Today' },
-  { id: 'jokic-passing', title: 'Jokić’s passing since 2023', when: 'Today' },
-  { id: 'lebron-2012-13', title: 'LeBron in 2012-13', when: 'Yesterday' },
-  { id: 'wemby-rim', title: 'Wembanyama at the rim', when: 'Mar 20' },
-]
-
-/** Вопрос, с которого начинался сохранённый Диалог. */
-export const CONVERSATION_QUESTIONS: Record<string, string> = {
-  'curry-lillard': 'Compare Curry and Lillard as shooters since 2021',
-  'jokic-passing': 'How has Jokić’s passing changed since 2023?',
-  'lebron-2012-13': 'What did LeBron average in 2012-13?',
-  'wemby-rim': 'How good is Wembanyama’s rim protection?',
 }

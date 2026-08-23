@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 
-import { createMockAnswerStream } from '@/features/chat/mock/mockStream'
+import { createMockAnswerStream } from '@/features/chat/test/fixtureStream'
 import { ConversationView } from '@/features/chat/ui/ConversationView'
 import { renderWithProviders } from '@/test/render'
 
@@ -19,11 +19,12 @@ describe('ConversationView', () => {
   it('на пустом Диалоге предлагает вопрос и отвечает на него', async () => {
     const { user } = renderConversation()
 
-    await user.click(screen.getByRole('button', { name: /What did LeBron average/ }))
+    const question = 'How many points did LeBron James average in 2012-13?'
+    await user.click(screen.getByRole('button', { name: question }))
 
     expect(await screen.findByText(/LeBron averaged/)).toBeInTheDocument()
     // Реплика пользователя осталась в ленте, ответ Агента — рядом.
-    expect(screen.getByText('What did LeBron average in 2012-13?')).toBeInTheDocument()
+    expect(screen.getByText(question)).toBeInTheDocument()
   })
 
   it('показывает результат Инструмента в рейке Evidence со штампом источника', async () => {
@@ -61,13 +62,13 @@ describe('ConversationView', () => {
     expect(cards[0]).toHaveAttribute('data-active', 'false')
   })
 
-  it('вопрос без мок-фикстуры даёт состояние ошибки с повтором, а не пустой ответ', async () => {
+  it('событие error доходит до ленты состоянием ошибки с повтором, а не пустым ответом', async () => {
     const { user, composer } = renderConversation()
 
     await user.type(composer, 'Who won the 1971 finals?{Enter}')
 
     const error = await screen.findByRole('alert')
-    expect(within(error).getByText('No mock answer for this question')).toBeInTheDocument()
+    expect(within(error).getByText('No scripted answer for this question')).toBeInTheDocument()
     expect(within(error).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
@@ -121,6 +122,49 @@ describe('ConversationView', () => {
     expect(screen.queryByTestId('typing-cursor')).not.toBeInTheDocument()
     // Композер разблокирован: иначе после обрыва Диалог был бы мёртв до перезагрузки.
     expect(screen.getByLabelText('Ask a question')).toBeEnabled()
+  })
+
+  it('поток, кончившийся без done, не оставляет вечный курсор печати', async () => {
+    const user = userEvent.setup()
+    // Так выглядит таймаут прокси: тело закрылось, терминального события не было.
+    const truncatedStream = async function* () {
+      await Promise.resolve()
+      yield { type: 'token', text: 'Volume is up' } as const
+    }
+    renderWithProviders(<ConversationView stream={truncatedStream} />)
+
+    await user.type(screen.getByLabelText('Ask a question'), 'jokic{Enter}')
+
+    const error = await screen.findByRole('alert')
+    expect(within(error).getByText('The answer stream stopped')).toBeInTheDocument()
+    expect(within(error).getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(screen.queryByTestId('typing-cursor')).not.toBeInTheDocument()
+    // Прочитанное остаётся на месте: пользователь это уже видел.
+    expect(screen.getByText(/Volume is up/)).toBeInTheDocument()
+  })
+
+  it('уход с Диалога посреди ответа отменяет запрос', async () => {
+    const user = userEvent.setup()
+    // Ответ, который никогда не заканчивается сам: единственный способ его закрыть — отмена.
+    let signal: AbortSignal | undefined
+    const endlessStream = async function* (_question: string, options?: { signal?: AbortSignal }) {
+      signal = options?.signal
+      yield { type: 'token', text: 'Считаю…' } as const
+      await new Promise(() => {
+        // Тело потока не закрывается: так выглядит генерация, которая ещё идёт.
+      })
+    }
+    const view = renderWithProviders(<ConversationView stream={endlessStream} />)
+
+    await user.type(screen.getByLabelText('Ask a question'), 'jokic{Enter}')
+    await screen.findByText('Считаю…')
+    expect(signal?.aborted).toBe(false)
+
+    // Размонтирование — это переход на другой Диалог или выход из чата. Без отмены POST
+    // остался бы открытым до конца генерации, и за неё платили бы впустую.
+    view.unmount()
+
+    expect(signal?.aborted).toBe(true)
   })
 
   it('пустой вопрос не отправляется', async () => {

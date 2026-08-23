@@ -10,19 +10,12 @@ Postgres, самокоррекция по кандидатам, учёт сто�
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from contextlib import aclosing
 from typing import Any
 
 import litellm
 import pytest
-from litellm.types.utils import (
-    ChatCompletionMessageToolCall,
-    Choices,
-    Function,
-    Message,
-    ModelResponse,
-    Usage,
-)
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -34,14 +27,20 @@ from court_vision.agent.errors import (
     ProviderRequestRejected,
     ProviderUnavailable,
 )
-from court_vision.agent.loop import Turn, answer
+from court_vision.agent.loop import AgentAnswer, TokenChunk, ToolCalled, Turn, stream_answer
 from court_vision.agent.models import LlmUsage
 from court_vision.config import Settings
+from tests.conftest import (
+    MODEL,
+    RESPONSE_MODEL,
+    ProviderFactory,
+    empty_reply,
+    preamble_tool_call_reply,
+    text_reply,
+    tool_call_reply,
+)
 
 pytestmark = pytest.mark.usefixtures("seeded_database")
-
-MODEL = "anthropic/claude-haiku-4-5"
-RESPONSE_MODEL = "claude-haiku-4-5-20251001"
 
 QUESTION = [Turn(role="user", content="Сколько набирал Леброн в 2012-13?")]
 
@@ -52,81 +51,25 @@ def agent_settings() -> Settings:
     return Settings(llm_model=MODEL, llm_max_steps=3)
 
 
-def tool_call_reply(name: str, arguments: str, *, call_id: str = "call_1") -> ModelResponse:
-    """Ответ модели с запросом Инструмента. `arguments` — строка: модель присылает JSON
-    текстом, и тесты обязаны иметь возможность прислать сюда что угодно."""
-    message = Message(
-        content=None,
-        role="assistant",
-        tool_calls=[
-            ChatCompletionMessageToolCall(
-                id=call_id, type="function", function=Function(name=name, arguments=arguments)
-            )
-        ],
-    )
-    return _response(message, finish_reason="tool_calls")
+async def answer(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    history: Sequence[Turn],
+    settings: Settings,
+) -> AgentAnswer:
+    """Вычерпывает цикл до итога.
 
-
-def text_reply(text: str, *, finish_reason: str = "stop") -> ModelResponse:
-    return _response(Message(content=text, role="assistant"), finish_reason=finish_reason)
-
-
-def _response(message: Message, *, finish_reason: str) -> ModelResponse:
-    return ModelResponse(
-        id="chatcmpl-test",
-        choices=[Choices(finish_reason=finish_reason, index=0, message=message)],
-        # Модель из ответа отличается от запрошенной строки litellm — по ней litellm и
-        # считает стоимость.
-        model=RESPONSE_MODEL,
-        usage=Usage(prompt_tokens=1200, completion_tokens=80, total_tokens=1280),
-    )
-
-
-@dataclass
-class FakeProvider:
-    """Подставной провайдер: отдаёт заготовленные ответы по порядку и запоминает запросы.
-
-    Запомненные `calls` — главный предмет проверки: только по ним видно, что именно доехало
-    до модели на следующем шаге.
+    Помощник тестов, а не часть цикла: продакшн-потребитель у цикла один — SSE, и ему нужны
+    все события. Здесь же почти каждый тест проверяет именно итог, и разбор потока в каждом
+    из них закрывал бы собой предмет проверки.
     """
-
-    replies: list[ModelResponse | Exception]
-    repeat_last: bool = False
-    calls: list[dict[str, Any]] = field(default_factory=list)
-
-    async def __call__(self, **kwargs: Any) -> ModelResponse:
-        # Копия истории, а не ссылка: цикл дописывает в тот же список, и без копии каждый
-        # запомненный запрос показывал бы состояние на конец прогона, а не на момент вызова.
-        self.calls.append({**kwargs, "messages": list(kwargs["messages"])})
-        index = len(self.calls) - 1
-        if index >= len(self.replies):
-            if not self.repeat_last:
-                raise AssertionError("модель вызвана больше раз, чем ожидал тест")
-            index = len(self.replies) - 1
-        reply = self.replies[index]
-        if isinstance(reply, Exception):
-            raise reply
-        return reply
-
-    def tool_results(self) -> list[dict[str, Any]]:
-        """Результаты Инструментов, доехавшие до модели, — из последнего запроса."""
-        return [
-            json.loads(message["content"])
-            for message in self.calls[-1]["messages"]
-            if message.get("role") == "tool"
-        ]
-
-
-@pytest.fixture
-def provider(monkeypatch: pytest.MonkeyPatch) -> Any:
-    """Ставит подставного провайдера на границу litellm. Заготовки складывает тест."""
-
-    def _install(*replies: ModelResponse | Exception, repeat_last: bool = False) -> FakeProvider:
-        fake = FakeProvider(replies=list(replies), repeat_last=repeat_last)
-        monkeypatch.setattr(litellm, "acompletion", fake)
-        return fake
-
-    return _install
+    async with aclosing(
+        stream_answer(session_factory, history=history, settings=settings)
+    ) as events:
+        async for event in events:
+            if isinstance(event, AgentAnswer):
+                return event
+    raise AssertionError("Цикл закончился без ответа и без ошибки.")
 
 
 async def usage_rows(session: AsyncSession) -> list[LlmUsage]:
@@ -135,7 +78,9 @@ async def usage_rows(session: AsyncSession) -> list[LlmUsage]:
 
 
 async def test_вопрос_проходит_через_инструмент_к_финальному_ответу(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     fake = provider(
         tool_call_reply(
@@ -161,8 +106,44 @@ async def test_вопрос_проходит_через_инструмент_к_
     assert tool_result["seasons"][0]["totals"]["points"] == 2036
 
 
+async def test_цикл_отдаёт_события_по_мере_появления(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """Стриминг по-настоящему: текст приезжает частями, вызов Инструмента виден до ответа,
+    а склейка отданных фрагментов совпадает с итоговым текстом — именно он и сохраняется
+    Репликой."""
+    provider(
+        preamble_tool_call_reply(
+            "Секунду.", "get_player_stats", json.dumps({"player_name": "LeBron James"})
+        ),
+        text_reply("В сезоне 2012-13 Леброн набирал 26.8 очка за игру."),
+    )
+
+    events = [
+        event
+        async for event in stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+    ]
+
+    tool_calls = [event for event in events if isinstance(event, ToolCalled)]
+    tokens = [event for event in events if isinstance(event, TokenChunk)]
+    assert [call.name for call in tool_calls] == ["get_player_stats"]
+    assert len(tokens) > 1, "ответ пришёл одним куском — это не поток"
+    # Преамбула проговорена до вызова Инструмента, вызов — до ответа.
+    assert events.index(tokens[0]) < events.index(tool_calls[0]) < events.index(tokens[-1])
+
+    final = events[-1]
+    assert isinstance(final, AgentAnswer)
+    assert "".join(token.text for token in tokens) == final.text
+    # Преамбула и ответ — разные абзацы: без разделителя они склеились бы в одну фразу.
+    assert final.text == "Секунду.\n\nВ сезоне 2012-13 Леброн набирал 26.8 очка за игру."
+
+
 async def test_инструменты_объявлены_модели(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     fake = provider(text_reply("Привет."))
 
@@ -177,8 +158,49 @@ async def test_инструменты_объявлены_модели(
     assert "латиницей" in tools[0]["function"]["description"]
 
 
+async def test_адрес_и_ключ_шлюза_доезжают_до_провайдера(
+    session_factory: async_sessionmaker[AsyncSession],
+    provider: ProviderFactory,
+) -> None:
+    """Модель через OpenAI-совместимый шлюз — это `openai/` в строке модели плюс адрес.
+
+    Потеряется адрес — запрос уедет по адресу OpenAI по умолчанию, где этой модели нет, и
+    отвалится не на конфиге, а ошибкой провайдера на живом вопросе.
+    """
+    settings = Settings(
+        llm_model="openai/anthropic/claude-haiku-4.5",
+        llm_api_base="https://gateway.example/v1",
+        llm_api_key="sk-gateway",
+        llm_max_steps=3,
+    )
+    fake = provider(text_reply("Привет."))
+
+    await answer(session_factory, history=QUESTION, settings=settings)
+
+    assert fake.calls[0]["model"] == "openai/anthropic/claude-haiku-4.5"
+    assert fake.calls[0]["api_base"] == "https://gateway.example/v1"
+    assert fake.calls[0]["api_key"] == "sk-gateway"
+
+
+async def test_без_настроек_шлюза_провайдер_ищет_ключ_сам(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """None, а не пустая строка: по None litellm возвращается к своему поиску ключа в
+    окружении, а пустая строка уехала бы в заголовок авторизации как есть."""
+    fake = provider(text_reply("Привет."))
+
+    await answer(session_factory, history=QUESTION, settings=agent_settings)
+
+    assert fake.calls[0]["api_key"] is None
+    assert fake.calls[0]["api_base"] is None
+
+
 async def test_история_диалога_целиком_уезжает_модели(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Follow-up «а в 2015-16?» работает только если предыдущие реплики доехали."""
     fake = provider(text_reply("В 2015-16 — 25.3 очка."))
@@ -200,7 +222,9 @@ async def test_история_диалога_целиком_уезжает_мо�
 
 
 async def test_пустая_история_не_доходит_до_провайдера(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Пустой Диалог — ошибка вызывающего, и платить за отказ провайдера незачем."""
     fake = provider()
@@ -212,7 +236,9 @@ async def test_пустая_история_не_доходит_до_провай
 
 
 async def test_не_найдено_с_кандидатами_доезжает_до_модели_результатом(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Неудачная резолюция — не исключение, а ход диалога: цикл продолжается."""
     fake = provider(
@@ -239,7 +265,9 @@ async def test_не_найдено_с_кандидатами_доезжает_д
 
 
 async def test_модель_самокорректируется_вторым_вызовом(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Многошаговый цикл целиком: неудачный вызов → структурная причина → второй вызов → цифры.
 
@@ -274,7 +302,9 @@ async def test_модель_самокорректируется_вторым_в
 
 
 async def test_кириллица_в_имени_не_роняет_цикл(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     fake = provider(
         tool_call_reply("get_player_stats", json.dumps({"player_name": "Леброн Джеймс"})),
@@ -288,7 +318,9 @@ async def test_кириллица_в_имени_не_роняет_цикл(
 
 
 async def test_невалидные_аргументы_возвращаются_модели_а_не_падают(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     provider(
         tool_call_reply(
@@ -307,7 +339,9 @@ async def test_невалидные_аргументы_возвращаются_
 
 
 async def test_несуществующий_инструмент_возвращается_модели(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     provider(
         tool_call_reply("search_corpus", "{}"),
@@ -324,7 +358,7 @@ async def test_несуществующий_инструмент_возвращ�
 async def test_упавший_инструмент_не_обрывает_ход_агента(
     session_factory: async_sessionmaker[AsyncSession],
     agent_settings: Settings,
-    provider: Any,
+    provider: ProviderFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Обещание «Инструмент не бросает» держится и когда падает не он сам, а БД под ним.
@@ -349,7 +383,9 @@ async def test_упавший_инструмент_не_обрывает_ход_
 
 
 async def test_число_шагов_цикла_ограничено(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Модель, бесконечно перевызывающая Инструмент, обязана упереться в потолок."""
     fake = provider(
@@ -365,7 +401,9 @@ async def test_число_шагов_цикла_ограничено(
 
 
 async def test_оборванный_ответ_не_выдаётся_за_готовый(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """`finish_reason=length` — обрыв на полуслове: «набирал 26.» соврало бы цифрой."""
     provider(text_reply("В сезоне 2012-13 Леброн набирал 26.", finish_reason="length"))
@@ -376,8 +414,54 @@ async def test_оборванный_ответ_не_выдаётся_за_гот
     assert raised.value.extensions() == {"reason": "truncated"}
 
 
+async def test_преамбула_без_ответа_не_выдаётся_за_ответ(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """Модель сказала «сейчас посмотрю», сходила за данными и вернулась ни с чем.
+
+    Преамбула уже прочитана пользователем, но ответом она не является: отдать её за готовый
+    ответ — то же самое, что отдать пустую строку, только незаметнее.
+    """
+    provider(
+        preamble_tool_call_reply(
+            "Секунду, посмотрю статистику.",
+            "get_player_stats",
+            json.dumps({"player_name": "LeBron James"}),
+        ),
+        text_reply("", pieces=1),
+    )
+
+    with pytest.raises(IncompleteAnswer) as raised:
+        await answer(session_factory, history=QUESTION, settings=agent_settings)
+
+    assert raised.value.extensions() == {"reason": "empty"}
+
+
+async def test_брошенный_поток_закрывает_поток_провайдера(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """Пользователь ушёл со страницы посреди ответа: соединение с провайдером обязано
+    закрыться сразу, а не дожидаться сборки мусора."""
+    fake = provider(text_reply("В сезоне 2012-13 Леброн набирал 26.8 очка за игру."))
+
+    async with aclosing(
+        stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+    ) as events:
+        async for event in events:
+            if isinstance(event, TokenChunk):
+                break
+
+    assert fake.closed, "поток провайдера остался открытым"
+
+
 async def test_пустой_ответ_модели_не_выдаётся_за_ответ(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     provider(text_reply("   "))
 
@@ -388,7 +472,9 @@ async def test_пустой_ответ_модели_не_выдаётся_за_�
 
 
 async def test_ошибка_провайдера_превращается_в_доменную(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     provider(
         litellm.exceptions.APIConnectionError(
@@ -404,7 +490,9 @@ async def test_ошибка_провайдера_превращается_в_д�
 
 
 async def test_отвергнутый_запрос_отличается_от_недоступности(
-    session_factory: async_sessionmaker[AsyncSession], agent_settings: Settings, provider: Any
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
 ) -> None:
     """Опечатка в `LLM_MODEL` — не сбой провайдера: повторами она не лечится."""
     provider(
@@ -423,18 +511,12 @@ async def test_отвергнутый_запрос_отличается_от_н�
 async def test_ответ_без_вариантов_остаётся_доменной_ошибкой(
     session_factory: async_sessionmaker[AsyncSession],
     agent_settings: Settings,
-    provider: Any,
+    provider: ProviderFactory,
     session: AsyncSession,
 ) -> None:
-    """200 без choices (срез фильтром, сбой шлюза) не должен выходить наружу IndexError'ом."""
-    provider(
-        ModelResponse(
-            id="chatcmpl-test",
-            choices=[],
-            model=RESPONSE_MODEL,
-            usage=Usage(prompt_tokens=1200, completion_tokens=0, total_tokens=1200),
-        )
-    )
+    """Поток без вариантов ответа (срез фильтром, сбой шлюза) не должен выходить наружу
+    ни IndexError'ом, ни ошибкой сборки чанков из недр litellm."""
+    provider(empty_reply())
 
     with pytest.raises(ProviderUnavailable) as raised:
         await answer(session_factory, history=QUESTION, settings=agent_settings)
@@ -447,7 +529,7 @@ async def test_ответ_без_вариантов_остаётся_домен�
 async def test_каждый_вызов_модели_пишет_строку_учёта(
     session_factory: async_sessionmaker[AsyncSession],
     agent_settings: Settings,
-    provider: Any,
+    provider: ProviderFactory,
     session: AsyncSession,
 ) -> None:
     provider(
@@ -472,7 +554,7 @@ async def test_каждый_вызов_модели_пишет_строку_уч
 async def test_учёт_переживает_провалившийся_ход_агента(
     session_factory: async_sessionmaker[AsyncSession],
     agent_settings: Settings,
-    provider: Any,
+    provider: ProviderFactory,
     session: AsyncSession,
 ) -> None:
     """Оплаченные вызовы обязаны остаться в учёте, даже если ход агента закончился ошибкой:

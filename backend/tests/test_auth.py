@@ -17,9 +17,9 @@ import httpx
 from cryptography.hazmat.primitives import serialization
 from fastapi import FastAPI
 
-from conftest import SigningKey, TokenFactory
 from court_vision.config import Settings
 from court_vision.main import create_app
+from tests.conftest import SigningKey, TokenFactory
 
 ME_URL = "/api/v1/me"
 PROBLEM_CONTENT_TYPE = "application/problem+json"

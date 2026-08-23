@@ -31,5 +31,8 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Базовый URL API задаётся здесь, а не читается из `.env`: тесты не должны зависеть от
+    // локального файла, которого в CI нет, а без переменной клиент намеренно падает.
+    env: { VITE_API_BASE_URL: 'http://api.test' },
   },
 })
