@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from base64 import urlsafe_b64encode
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -16,11 +17,13 @@ import httpx
 import litellm
 import pytest
 from fastapi import FastAPI
+from litellm.types.utils import EmbeddingResponse, Usage
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from court_vision.agent.models import LlmUsage
 from court_vision.conversations.service import FALLBACK_TITLE, append_message, create_conversation
+from court_vision.corpus.models import Chunk, Document
 from tests.conftest import (
     MODEL,
     ProviderFactory,
@@ -389,10 +392,24 @@ async def test_события_потока_описаны_в_openapi(app: FastAP
     }
     # Проекция результата — тоже объединение с дискриминатором: разбор карточки Evidence
     # генератор TS выводит из него, а не из строки в документации.
-    assert set(schemas["EvidenceView"]["discriminator"]["mapping"]) == {"table", "bars", "quote"}
-    # `citation` объявлен заранее и наполняется в спринте 2: контракт потока не должен
-    # меняться от появления RAG.
-    assert set(schemas["CitationEvent"]["properties"]) >= {"chunk_id", "document_title", "snippet"}
+    assert set(schemas["EvidenceView"]["discriminator"]["mapping"]) == {
+        "table",
+        "bars",
+        "quote",
+        "quotes",
+    }
+    # Событие `citation` — факт цитаты целиком: маркер, вызов и чанк корпуса.
+    assert set(schemas["CitationEvent"]["properties"]) >= {
+        "index",
+        "tool_call_id",
+        "chunk_id",
+        "document_title",
+        "locator",
+        "snippet",
+        "source_url",
+    }
+    # Сохранённая Реплика возвращает те же факты цитат: F5 восстанавливает маркеры.
+    assert "citations" in schemas["MessageResponse"]["properties"]
 
     stream = app.openapi()["paths"]["/api/v1/conversations/{conversation_id}/messages"]["post"]
     content = stream["responses"]["200"]["content"]
@@ -401,6 +418,113 @@ async def test_события_потока_описаны_в_openapi(app: FastAP
     # объединение событий. Именно по нему генератор TS выводит разбор потока.
     event = content["text/event-stream"]["itemSchema"]["properties"]["data"]
     assert event["contentSchema"]["$ref"].endswith("ChatStreamEvent")
+
+
+GOALTENDING_RULE = "Goaltending is touching the ball on its downward flight toward the basket."
+CITED_ANSWER = "Goaltending — касание мяча на нисходящей траектории к кольцу [1]."
+
+
+@pytest.fixture
+async def rule_corpus(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Один документ rulebook с одним чанком — достаточно, чтобы цитата прошла насквозь."""
+    async with session_factory() as session:
+        rulebook = Document(
+            source_type="rulebook",
+            title="NBA Official Playing Rules",
+            url="https://r",
+            content_hash="hash-rulebook",
+            fetched_at=datetime.now(UTC),
+        )
+        session.add(rulebook)
+        await session.flush()
+        session.add(
+            Chunk(
+                document_id=rulebook.id,
+                locator="Rule 11 — Sec. I",
+                text=GOALTENDING_RULE,
+                embedding=[1.0] + [0.0] * 767,
+                embedding_model="test/embedder",
+            )
+        )
+        await session.commit()
+
+
+@pytest.fixture
+def embedder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Подставной `litellm.aembedding` — вектор запроса совпадает с вектором чанка."""
+
+    async def fake(**kwargs: Any) -> EmbeddingResponse:
+        texts: list[str] = kwargs["input"]
+        return EmbeddingResponse(
+            model="gemini-embedding-001",
+            data=[
+                {"embedding": [1.0] + [0.0] * 767, "index": index, "object": "embedding"}
+                for index in range(len(texts))
+            ],
+            usage=Usage(prompt_tokens=7, completion_tokens=0, total_tokens=7),
+        )
+
+    monkeypatch.setattr(litellm, "aembedding", fake)
+
+
+async def test_цитата_приходит_событием_до_done_и_переживает_перезагрузку(
+    api_client: httpx.AsyncClient,
+    provider: ProviderFactory,
+    rule_corpus: None,
+    embedder: None,
+) -> None:
+    """Сквозной путь спринта: вопрос про правило → цитата `[1]` событием потока → после F5
+    те же факты цитат возвращаются вместе с Репликой."""
+    provider(
+        tool_call_reply(
+            "search_corpus", json.dumps({"query": "goaltending rule", "source": "rulebook"})
+        ),
+        text_reply(CITED_ANSWER),
+    )
+    conversation_id = await new_conversation(api_client)
+
+    events = await ask(api_client, conversation_id, "Что такое goaltending?")
+
+    kinds = [event["type"] for event in events]
+    assert "citation" in kinds
+    # Цитаты — после текста (маркеры валидируются по финальному тексту), но строго до done.
+    assert kinds.index("citation") > kinds.index("token")
+    assert kinds.index("citation") < kinds.index("done")
+
+    citation = next(event for event in events if event["type"] == "citation")
+    assert citation["index"] == 1
+    assert citation["tool_call_id"] == events[0]["tool_call_id"]
+    assert citation["document_title"] == "NBA Official Playing Rules"
+    assert citation["locator"] == "Rule 11 — Sec. I"
+    assert citation["snippet"] == GOALTENDING_RULE
+    assert citation["source_url"] == "https://r"
+    assert citation["chunk_id"] > 0
+
+    # Карточка Evidence — цитаты с номерами, а не дамп аргументов вызова.
+    result = next(event for event in events if event["type"] == "tool_result")
+    assert result["view"]["kind"] == "quotes"
+    assert result["view"]["quotes"][0]["index"] == 1
+
+    # Перезагрузка: сохранённая Реплика несёт ровно те же факты цитат, что и поток.
+    messages = (await api_client.get(f"{CONVERSATIONS}/{conversation_id}/messages")).json()
+    user_message, agent_message = messages["items"]
+    assert user_message["citations"] == []
+    assert agent_message["content"] == CITED_ANSWER
+    assert agent_message["citations"] == [citation]
+
+
+async def test_ответ_без_корпуса_обходится_без_событий_citation(
+    api_client: httpx.AsyncClient, provider: ProviderFactory
+) -> None:
+    """Обычный статистический ответ: цитат нет ни в потоке, ни в сохранённой Реплике."""
+    provider(*answer_replies())
+    conversation_id = await new_conversation(api_client)
+
+    events = await ask(api_client, conversation_id, QUESTION)
+
+    assert "citation" not in [event["type"] for event in events]
+    messages = (await api_client.get(f"{CONVERSATIONS}/{conversation_id}/messages")).json()
+    assert [message["citations"] for message in messages["items"]] == [[], []]
 
 
 async def test_история_диалога_не_включает_кухню_инструментов(

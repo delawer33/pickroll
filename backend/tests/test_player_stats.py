@@ -2,7 +2,7 @@
 Postgres с загруженной фикстурой датасета.
 
 Фикстура собрана под эти тесты: в ней десятки игроков с фамилией James и Curry (для
-неоднозначности), но строки Box Score есть только у четырёх звёзд.
+неоднозначности), но строки Box Score есть только у пяти звёзд.
 """
 
 from __future__ import annotations
@@ -110,10 +110,58 @@ async def test_без_сезона_отдаётся_вся_карьера(api_cl
     seasons = [season["season"] for season in response.json()["seasons"]]
 
     assert seasons == sorted(seasons)
-    # Историческая эра начинается с 2005-06 — более ранние сезоны в систему не грузятся.
-    assert seasons[0] == "2005-06"
-    assert len(seasons) == 9
+    # Историческая эра — с основания лиги: сезон 2004-05 больше не отсекается.
+    assert seasons[0] == "2004-05"
+    assert len(seasons) == 10
     assert all(season["games_played"] > 0 for season in response.json()["seasons"])
+
+
+async def test_невведённые_метрики_старой_эры_отдаются_как_null(
+    api_client: httpx.AsyncClient,
+) -> None:
+    # В 1961-62 лига не считала ни блоки, ни перехваты, ни потери, ни трёхочковые:
+    # null здесь значит «метрика не считалась», а ноль значил бы, что Уилт за сезон
+    # ни разу не накрыл бросок.
+    response = await api_client.get(
+        STATS_URL, params={"player_name": "Wilt Chamberlain", "season": "1961-62"}
+    )
+
+    assert response.status_code == 200
+    season = response.json()["seasons"][0]
+
+    totals = season["totals"]
+    for metric in (
+        "blocks",
+        "steals",
+        "turnovers",
+        "rebounds_offensive",
+        "rebounds_defensive",
+        "three_pointers_made",
+        "three_pointers_attempted",
+    ):
+        assert totals[metric] is None, metric
+        assert season["averages"][metric] is None, metric
+    assert season["averages"]["three_point_percentage"] is None
+
+    # Считавшиеся метрики — числа, сверенные со справочниками: 80 матчей, 4029 очков.
+    assert season["games_played"] == 80
+    assert totals["points"] == 4029
+    assert totals["rebounds_total"] == 2052
+    assert season["averages"]["points"] == 50.4
+
+
+async def test_метрики_современной_эры_без_null(api_client: httpx.AsyncClient) -> None:
+    response = await api_client.get(
+        STATS_URL, params={"player_name": "LeBron James", "season": "2012-13"}
+    )
+
+    assert response.status_code == 200
+    season = response.json()["seasons"][0]
+    assert season["totals"]["blocks"] is not None
+    assert season["totals"]["steals"] is not None
+    assert season["totals"]["turnovers"] is not None
+    assert season["averages"]["blocks"] is not None
+    assert season["averages"]["minutes"] is not None
 
 
 async def test_пустой_сезон_отличается_от_нулевой_статистики(

@@ -60,14 +60,27 @@ class TestGameTypeOf:
 
 
 class TestHistoricalEra:
-    def test_сезон_с_начала_эры_входит(self) -> None:
-        assert rows.is_historical_era("2005-06")
+    def test_первый_сезон_лиги_входит(self) -> None:
+        assert rows.is_historical_era("1946-47")
 
-    def test_более_ранний_сезон_не_входит(self) -> None:
-        assert not rows.is_historical_era("2004-05")
+    def test_сезон_до_основания_лиги_не_входит(self) -> None:
+        assert not rows.is_historical_era("1945-46")
 
     def test_поздний_сезон_входит(self) -> None:
         assert rows.is_historical_era("2024-25")
+
+
+class TestMetricTracked:
+    def test_метрика_не_считается_до_сезона_введения(self) -> None:
+        assert not rows.metric_tracked("blocks", "1961-62")
+        assert not rows.metric_tracked("blocks", "1972-73")
+
+    def test_метрика_считается_с_сезона_введения(self) -> None:
+        assert rows.metric_tracked("blocks", "1973-74")
+        assert rows.metric_tracked("three_pointers_made", "1979-80")
+
+    def test_неизвестная_метрика_считается_всегда(self) -> None:
+        assert rows.metric_tracked("points", "1946-47")
 
 
 class TestPlayerRow:
@@ -127,10 +140,45 @@ class TestBoxScoreRow:
         assert parsed[10] == Decimal("39.167")
         assert parsed[11] == 26
 
-    def test_матч_до_исторической_эры_отбрасывается(self) -> None:
-        row = self._row(gameId="20100015", gameDate="2001-01-15 19:30:00")
+    def test_матч_до_основания_лиги_отбрасывается(self) -> None:
+        # Идентификатор непривычной формы — сезон берётся из даты: январь 1946 это 1945-46.
+        row = self._row(gameId="146", gameDate="1946-01-15 19:30:00")
 
         assert rows.box_score_row(row) is None
+
+    def test_невведённые_метрики_старой_эры_читаются_как_none(self) -> None:
+        # Датасет заполняет невведённые метрики нулями: в 1961-62 блоки и перехваты
+        # никто не считал, и ноль там — ложь. Решает METRIC_INTRODUCED, а не значение.
+        row = self._row(
+            gameId="26100001",
+            gameDate="1962-03-02 19:30:00",
+            steals="0.0",
+            blocks="0.0",
+            turnovers="0.0",
+            reboundsOffensive="0.0",
+            threePointersMade="0.0",
+            threePointersAttempted="0.0",
+        )
+
+        parsed = rows.box_score_row(row)
+
+        assert parsed is not None
+        assert parsed[2] == "1961-62"
+        assert parsed[17] is None  # blocks
+        assert parsed[16] is None  # steals
+        assert parsed[18] is None  # turnovers
+        assert parsed[14] is None  # rebounds_offensive
+        assert parsed[22] is None  # three_pointers_made
+        # Очки считались с основания лиги — они остаются числом.
+        assert parsed[11] == 26
+
+    def test_современный_сезон_невведённых_метрик_не_имеет(self) -> None:
+        parsed = rows.box_score_row(self._row(blocks="2", steals=""))
+
+        assert parsed is not None
+        assert parsed[17] == 2
+        # Пустое значение введённой метрики — по-прежнему ноль, а не «неизвестно».
+        assert parsed[16] == 0
 
     def test_пустые_счётные_показатели_читаются_как_ноль(self) -> None:
         parsed = rows.box_score_row(self._row(points="", assists="", numMinutes=""))

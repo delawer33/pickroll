@@ -10,7 +10,7 @@ materialized view в системе нет (см. docs/sprints/sprint-1.md). GRO
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Row, Select, func, select
+from sqlalchemy import Row, Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from court_vision.players.errors import AmbiguousPlayerName, PlayerNotFound, SeasonDataMissing
@@ -29,6 +29,7 @@ from court_vision.players.schemas import (
     SeasonTotals,
 )
 from court_vision.rounding import round_half_up
+from court_vision.seed.rows import METRIC_INTRODUCED
 
 
 async def get_player_stats(
@@ -92,8 +93,10 @@ def _aggregate_statement(player_id: int, season: str | None) -> Select[Any]:
             # предсезонку и Матч всех звёзд с регуляркой.
             BoxScore.game_type == REGULAR_SEASON,
             # Строка без минут — это DND/NWT: игрок был в заявке, но не выходил. Считать
-            # такие матчи проведёнными значит занижать все средние.
-            BoxScore.minutes.is_not(None),
+            # такие матчи проведёнными значит занижать все средние. До введения минут
+            # (1951-52) NULL означает «метрика не считалась», а не DND — те сезоны
+            # фильтр пропускает целиком, иначе они исчезли бы из карьеры.
+            or_(BoxScore.minutes.is_not(None), BoxScore.season < METRIC_INTRODUCED["minutes"]),
         )
         .group_by(BoxScore.season)
         .order_by(BoxScore.season)
@@ -103,8 +106,9 @@ def _aggregate_statement(player_id: int, season: str | None) -> Select[Any]:
 
 def _season_stats(row: Row[Any]) -> SeasonStats:
     totals = SeasonTotals(
-        # minutes лежат в numeric — sum() по ним приезжает Decimal'ом.
-        minutes=float(row.minutes or Decimal(0)),
+        # minutes лежат в numeric — sum() по ним приезжает Decimal'ом. SUM по NULL — NULL:
+        # для сезонов до введения метрики он остаётся None, а не превращается в ноль.
+        minutes=float(row.minutes) if row.minutes is not None else None,
         points=row.points,
         rebounds_total=row.rebounds_total,
         rebounds_offensive=row.rebounds_offensive,
@@ -144,21 +148,25 @@ def _averages(totals: SeasonTotals, games_played: int) -> SeasonAverages:
     def per_game(total: float) -> float:
         return round_half_up(Decimal(str(total)) / games_played, 1)
 
+    def per_game_if_tracked(total: float | None) -> float | None:
+        """None тотала — метрика не считалась в ту эпоху: среднее тоже None, не ноль."""
+        return per_game(total) if total is not None else None
+
     return SeasonAverages(
-        minutes=per_game(totals.minutes),
+        minutes=per_game_if_tracked(totals.minutes),
         points=per_game(totals.points),
         rebounds_total=per_game(totals.rebounds_total),
-        rebounds_offensive=per_game(totals.rebounds_offensive),
-        rebounds_defensive=per_game(totals.rebounds_defensive),
+        rebounds_offensive=per_game_if_tracked(totals.rebounds_offensive),
+        rebounds_defensive=per_game_if_tracked(totals.rebounds_defensive),
         assists=per_game(totals.assists),
-        steals=per_game(totals.steals),
-        blocks=per_game(totals.blocks),
-        turnovers=per_game(totals.turnovers),
+        steals=per_game_if_tracked(totals.steals),
+        blocks=per_game_if_tracked(totals.blocks),
+        turnovers=per_game_if_tracked(totals.turnovers),
         fouls_personal=per_game(totals.fouls_personal),
         field_goals_made=per_game(totals.field_goals_made),
         field_goals_attempted=per_game(totals.field_goals_attempted),
-        three_pointers_made=per_game(totals.three_pointers_made),
-        three_pointers_attempted=per_game(totals.three_pointers_attempted),
+        three_pointers_made=per_game_if_tracked(totals.three_pointers_made),
+        three_pointers_attempted=per_game_if_tracked(totals.three_pointers_attempted),
         free_throws_made=per_game(totals.free_throws_made),
         free_throws_attempted=per_game(totals.free_throws_attempted),
         field_goal_percentage=_percentage(totals.field_goals_made, totals.field_goals_attempted),
@@ -169,6 +177,9 @@ def _averages(totals: SeasonTotals, games_played: int) -> SeasonAverages:
     )
 
 
-def _percentage(made: int, attempted: int) -> float | None:
-    """None, а не ноль: не бросавший из-за дуги игрок — это не игрок с нулевым процентом."""
-    return round_half_up(Decimal(made) / attempted, 3) if attempted else None
+def _percentage(made: int | None, attempted: int | None) -> float | None:
+    """None, а не ноль: не бросавший из-за дуги игрок — это не игрок с нулевым процентом.
+    None во входе — метрика той эпохи не считалась, и процент считать не из чего."""
+    if made is None or not attempted:
+        return None
+    return round_half_up(Decimal(made) / attempted, 3)

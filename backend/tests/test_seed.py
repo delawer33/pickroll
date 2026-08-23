@@ -54,7 +54,7 @@ async def test_повторный_запуск_не_создаёт_дублей(
     assert first.box_scores == second.box_scores
 
 
-async def test_сезоны_до_исторической_эры_не_грузятся(
+async def test_грузятся_сезоны_с_основания_лиги(
     db_connection: asyncpg.Connection[Any],
     dataset_fixture_dir: Path,
 ) -> None:
@@ -63,14 +63,23 @@ async def test_сезоны_до_исторической_эры_не_грузя
     earliest_game_season = await db_connection.fetchval("SELECT min(season) FROM games")
     earliest_box_score_season = await db_connection.fetchval("SELECT min(season) FROM box_scores")
 
-    assert earliest_game_season == "2005-06"
-    assert earliest_box_score_season == "2005-06"
+    # Старейший сезон фикстуры — 1961-62 Уилта: эра начинается с 1946-47, и он проходит.
+    assert earliest_game_season == "1961-62"
+    assert earliest_box_score_season == "1961-62"
 
-    # В фикстуре у Кобе есть матчи сезона 2004-05 — они не должны были доехать.
+    # Сезон 2004-05 Кобе раньше отсекался эрой с 2005-06 — теперь он в данных.
     assert (
         await db_connection.fetchval(
-            "SELECT count(*) FROM box_scores WHERE player_id = $1 AND season < '2005-06'",
+            "SELECT count(*) FROM box_scores WHERE player_id = $1 AND season = '2004-05'",
             KOBE_ID,
+        )
+        > 0
+    )
+
+    # Невведённые метрики старой эры доезжают до БД как NULL, а не как ноль из датасета.
+    assert (
+        await db_connection.fetchval(
+            "SELECT count(*) FROM box_scores WHERE season = '1961-62' AND blocks IS NOT NULL"
         )
         == 0
     )

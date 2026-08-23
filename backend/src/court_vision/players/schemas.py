@@ -21,44 +21,51 @@ class PlayerIdentity(BaseModel):
 
 
 class SeasonTotals(BaseModel):
-    """Суммы за сезон."""
+    """Суммы за сезон.
 
-    minutes: float
+    Эра-зависимые метрики отдаются как null, если лига в тот сезон их не считала
+    (минуты — до 1951-52, перехваты/блоки/подборы по типам — до 1973-74, потери — до
+    1977-78, трёхочковые — до 1979-80). null = «метрика не считалась», не ноль.
+    """
+
+    minutes: float | None
     points: int
     rebounds_total: int
-    rebounds_offensive: int
-    rebounds_defensive: int
+    rebounds_offensive: int | None
+    rebounds_defensive: int | None
     assists: int
-    steals: int
-    blocks: int
-    turnovers: int
+    steals: int | None
+    blocks: int | None
+    turnovers: int | None
     fouls_personal: int
     field_goals_made: int
     field_goals_attempted: int
-    three_pointers_made: int
-    three_pointers_attempted: int
+    three_pointers_made: int | None
+    three_pointers_attempted: int | None
     free_throws_made: int
     free_throws_attempted: int
 
 
 class SeasonAverages(BaseModel):
     """Показатели за игру. Проценты попаданий — от тоталов, а не среднее процентов по матчам:
-    среднее процентов завышало бы вклад матчей с одним броском."""
+    среднее процентов завышало бы вклад матчей с одним броском.
 
-    minutes: float
+    Эра-зависимые метрики — null, если сезон раньше введения метрики (см. SeasonTotals)."""
+
+    minutes: float | None
     points: float
     rebounds_total: float
-    rebounds_offensive: float
-    rebounds_defensive: float
+    rebounds_offensive: float | None
+    rebounds_defensive: float | None
     assists: float
-    steals: float
-    blocks: float
-    turnovers: float
+    steals: float | None
+    blocks: float | None
+    turnovers: float | None
     fouls_personal: float
     field_goals_made: float
     field_goals_attempted: float
-    three_pointers_made: float
-    three_pointers_attempted: float
+    three_pointers_made: float | None
+    three_pointers_attempted: float | None
     free_throws_made: float
     free_throws_attempted: float
     field_goal_percentage: float | None = None

@@ -113,21 +113,25 @@ class BoxScore(Base):
     is_win: Mapped[bool] = mapped_column(Boolean)
     starting_position: Mapped[str | None] = mapped_column(String(8))
 
+    # Эра-зависимые метрики (NULLable) — лига начала считать их не с основания:
+    # минуты — 1951-52, перехваты/блоки/подборы по типам — 1973-74, потери — 1977-78,
+    # трёхочковые — 1979-80 (см. METRIC_INTRODUCED в seed/rows.py). NULL = «не считалась
+    # в ту эпоху», и это не ноль: SUM/AVG по NULL дают NULL, а не занижают агрегаты.
     minutes: Mapped[float | None] = mapped_column(Numeric(6, 3))
     points: Mapped[int] = mapped_column(Integer)
     assists: Mapped[int] = mapped_column(Integer)
     rebounds_total: Mapped[int] = mapped_column(Integer)
-    rebounds_offensive: Mapped[int] = mapped_column(Integer)
-    rebounds_defensive: Mapped[int] = mapped_column(Integer)
-    steals: Mapped[int] = mapped_column(Integer)
-    blocks: Mapped[int] = mapped_column(Integer)
-    turnovers: Mapped[int] = mapped_column(Integer)
+    rebounds_offensive: Mapped[int | None] = mapped_column(Integer)
+    rebounds_defensive: Mapped[int | None] = mapped_column(Integer)
+    steals: Mapped[int | None] = mapped_column(Integer)
+    blocks: Mapped[int | None] = mapped_column(Integer)
+    turnovers: Mapped[int | None] = mapped_column(Integer)
     fouls_personal: Mapped[int] = mapped_column(Integer)
 
     field_goals_made: Mapped[int] = mapped_column(Integer)
     field_goals_attempted: Mapped[int] = mapped_column(Integer)
-    three_pointers_made: Mapped[int] = mapped_column(Integer)
-    three_pointers_attempted: Mapped[int] = mapped_column(Integer)
+    three_pointers_made: Mapped[int | None] = mapped_column(Integer)
+    three_pointers_attempted: Mapped[int | None] = mapped_column(Integer)
     free_throws_made: Mapped[int] = mapped_column(Integer)
     free_throws_attempted: Mapped[int] = mapped_column(Integer)
 

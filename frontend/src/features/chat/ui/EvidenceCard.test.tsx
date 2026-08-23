@@ -54,6 +54,45 @@ describe('EvidenceCard', () => {
     expect(screen.getByText('Nothing to show for this result.')).toBeInTheDocument()
   })
 
+  it('выдача поиска по корпусу — цитаты с номерами [n] и mono-локаторами', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          id: 'call_corpus',
+          name: 'search_corpus',
+          source: 'goaltending rule',
+          durationMs: 148,
+          result: {
+            kind: 'quotes',
+            quotes: [
+              {
+                index: 1,
+                title: 'NBA Official Playing Rules',
+                locator: 'Rule 11 — Sec. I',
+                text: 'Goaltending is touching the ball on its downward flight.',
+              },
+              {
+                index: 2,
+                title: 'NBA Official Playing Rules',
+                locator: 'Rule 11 — Sec. II',
+                text: 'The ball may not be touched while it is in the cylinder.',
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    // Номер цитаты — тот же `[n]`, что у маркера в ответе: по нему пара «маркер-цитата»
+    // и находится глазами.
+    expect(screen.getByText('[1]')).toBeInTheDocument()
+    expect(screen.getByText('[2]')).toBeInTheDocument()
+    expect(screen.getByText('NBA Official Playing Rules · Rule 11 — Sec. I')).toBeInTheDocument()
+    expect(
+      screen.getByText('Goaltending is touching the ball on its downward flight.'),
+    ).toBeInTheDocument()
+  })
+
   it('отказ Инструмента подписан причиной и не выглядит удачным вызовом', () => {
     // Карточка вызова без данных обязана отличаться от карточки с данными: иначе рейка
     // говорит «Агент сходил за данными» там, где Агент вернулся ни с чем.

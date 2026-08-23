@@ -102,19 +102,56 @@ const SHOOTING_COMPARISON: AnswerFixture = {
     {
       id: 'call_corpus_shooters',
       name: 'search_corpus',
-      source: 'Scouting notes · chunk 41',
+      source: 'shooting gravity coverage',
       durationMs: 167,
       result: {
-        kind: 'quote',
-        text: '“…defenses still pick up Curry near half court, while Lillard is increasingly met at the arc — the difference in coverage says more about respected range than any percentage does.”',
+        kind: 'quotes',
+        quotes: [
+          {
+            index: 4,
+            title: 'Scouting notes',
+            locator: 'Coverage · §3',
+            text: '…defenses still pick up Curry near half court, while Lillard is increasingly met at the arc — the difference in coverage says more about respected range than any percentage does.',
+          },
+        ],
       },
     },
   ],
   citations: [
-    { index: 1, toolCallId: 'call_stats_shooters' },
-    { index: 2, toolCallId: 'call_series_shooters' },
-    { index: 3, toolCallId: 'call_percentiles_shooters' },
-    { index: 4, toolCallId: 'call_corpus_shooters' },
+    {
+      index: 1,
+      toolCallId: 'call_stats_shooters',
+      chunkId: 101,
+      documentTitle: 'League shooting splits',
+      locator: '2021-22 — 2024-25',
+      snippet: 'Curry converted at a higher clip in three of the four seasons.',
+    },
+    {
+      index: 2,
+      toolCallId: 'call_series_shooters',
+      chunkId: 102,
+      documentTitle: 'Pull-up shooting report',
+      locator: 'Guards · pull-up threes',
+      snippet: 'Curry stayed above league-average pull-up efficiency in each season.',
+    },
+    {
+      index: 3,
+      toolCallId: 'call_percentiles_shooters',
+      chunkId: 103,
+      documentTitle: 'Qualified guards percentiles',
+      locator: '2024-25 · 84 guards',
+      snippet: '99th percentile on three-point volume, 96th on efficiency.',
+    },
+    {
+      index: 4,
+      toolCallId: 'call_corpus_shooters',
+      chunkId: 104,
+      documentTitle: 'Scouting notes',
+      locator: 'Coverage · §3',
+      snippet:
+        'Defenses still pick up Curry near half court, while Lillard is increasingly met at the arc.',
+      sourceUrl: 'https://example.test/scouting-notes',
+    },
   ],
 }
 
@@ -143,17 +180,39 @@ export const ANSWER_FIXTURES: AnswerFixture[] = [
       {
         id: 'call_corpus_jokic',
         name: 'search_corpus',
-        source: 'Basketball Reference · chunk 14',
+        source: 'Jokic passing profile',
         durationMs: 148,
         result: {
-          kind: 'quote',
-          text: '…increasingly initiated offense from the perimeter rather than the post, shortening the time between catch and pass.',
+          kind: 'quotes',
+          quotes: [
+            {
+              index: 2,
+              title: 'Basketball Reference',
+              locator: 'Play-by-play · chunk 14',
+              text: '…increasingly initiated offense from the perimeter rather than the post, shortening the time between catch and pass.',
+            },
+          ],
         },
       },
     ],
     citations: [
-      { index: 1, toolCallId: 'call_stats_jokic' },
-      { index: 2, toolCallId: 'call_corpus_jokic' },
+      {
+        index: 1,
+        toolCallId: 'call_stats_jokic',
+        chunkId: 14,
+        documentTitle: 'Nikola Jokić per-100 stats',
+        locator: '2022-23 — 2024-25',
+        snippet: 'Assists per 100 rose from 13.7 to 15.9 while turnovers fell to 4.4.',
+      },
+      {
+        index: 2,
+        toolCallId: 'call_corpus_jokic',
+        chunkId: 15,
+        documentTitle: 'Basketball Reference',
+        locator: 'Play-by-play · chunk 14',
+        snippet: 'Increasingly initiated offense from the perimeter rather than the post.',
+        sourceUrl: 'https://example.test/jokic',
+      },
     ],
   },
   {
@@ -174,7 +233,16 @@ export const ANSWER_FIXTURES: AnswerFixture[] = [
         },
       },
     ],
-    citations: [{ index: 1, toolCallId: 'call_stats_lebron' }],
+    citations: [
+      {
+        index: 1,
+        toolCallId: 'call_stats_lebron',
+        chunkId: 21,
+        documentTitle: 'LeBron James per-game stats',
+        locator: '2012-13 · Miami',
+        snippet: '26.8 points, 8.0 rebounds and 7.3 assists in 76 games on 64.0 TS%.',
+      },
+    ],
   },
   {
     keywords: ['wembanyama', 'rim protection'],
@@ -210,8 +278,22 @@ export const ANSWER_FIXTURES: AnswerFixture[] = [
       },
     ],
     citations: [
-      { index: 1, toolCallId: 'call_percentiles_wemby' },
-      { index: 2, toolCallId: 'call_stats_wemby' },
+      {
+        index: 1,
+        toolCallId: 'call_percentiles_wemby',
+        chunkId: 31,
+        documentTitle: 'Qualified centers percentiles',
+        locator: '2024-25 · 62 centers',
+        snippet: '5.1 blocks per 100, first among qualified centers.',
+      },
+      {
+        index: 2,
+        toolCallId: 'call_stats_wemby',
+        chunkId: 32,
+        documentTitle: 'Victor Wembanyama per-100 stats',
+        locator: '2024-25',
+        snippet: 'Foul rate of 4.6 per 100 puts him in the bottom third.',
+      },
     ],
   },
   SHOOTING_COMPARISON,

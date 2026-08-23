@@ -16,6 +16,7 @@ personId,firstName,lastName,birthDate,school,country,heightInches,bodyWeightLbs,
 95,Mark,Bryant,1965-04-25,Seton Hall,USA,81,250,9,0,1,0,0,1,1,1988,1,21,1988,2002
 1628418,Thomas,Bryant,1997-07-31,Indiana,USA,81,248,3,0,1,1,1,1,1,2017,2,42,2017,
 76291,Wallace,Bryant,1959-07-14,San Francisco,USA,84,245,31,0,0,1,0,1,1,1982,2,30,1983,1985
+76375,Wilt,Chamberlain,1936-08-21,Kansas,USA,85,250,13,0,0,1,0,1,1,1959,,,1959,1972
 1530,James,Collins,1973-11-05,Florida State,USA,76,196,32,1,0,0,0,1,1,1997,2,36,1997,1997
 1526,James,Cotton,1975-12-14,Long Beach State,USA,77,220,,1,0,0,0,1,1,1997,2,32,1997,1998
 209,Dell,Curry,1964-06-25,Virginia Tech,USA,77,205,30,1,1,0,0,1,1,1986,1,15,1986,2001

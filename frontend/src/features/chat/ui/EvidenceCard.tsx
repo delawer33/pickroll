@@ -94,6 +94,28 @@ function ToolResultView({ result }: { result: ToolResult }) {
     )
   }
 
+  if (result.kind === 'quotes') {
+    // Выдача поиска по корпусу: у каждой цитаты номер `[n]` — тот же, что у маркера в
+    // ответе, — и mono-локатор документа. Это и делает карточку провенансом (§7.2).
+    return (
+      <ul className="grid gap-3">
+        {result.quotes.map((quote) => (
+          <li key={quote.index} className="grid min-w-0 gap-1">
+            <p className="t-mono flex min-w-0 items-baseline gap-2 text-ink-muted">
+              <span className="num shrink-0 text-accent-text">[{quote.index}]</span>
+              <span className="min-w-0 flex-1 truncate">
+                {quote.title} · {quote.locator}
+              </span>
+            </p>
+            <blockquote className="t-body-sm border-l-2 border-line pl-3 text-ink-secondary">
+              {quote.text}
+            </blockquote>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+
   if (result.kind === 'table') {
     return <DataTable columns={result.columns} rows={result.rows} />
   }

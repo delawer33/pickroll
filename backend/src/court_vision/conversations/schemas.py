@@ -37,6 +37,25 @@ class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
 
 
+class CitationEvent(BaseModel):
+    """Источник, на который опирается ответ, — факт цитаты целиком.
+
+    И вызов (`tool_call_id` — карточка Evidence, на которую укажет маркер `[n]`), и чанк
+    корпуса (`chunk_id`, документ, локатор): клиенту не приходится собирать цитату из двух
+    событий. Приходит после текста ответа, перед `done` — маркеры валидируются постфактум
+    по финальному тексту.
+    """
+
+    type: Literal["citation"] = "citation"
+    index: int
+    tool_call_id: str
+    chunk_id: int
+    document_title: str
+    locator: str
+    snippet: str
+    source_url: str | None = None
+
+
 class MessageResponse(BaseModel):
     """Реплика Диалога."""
 
@@ -44,6 +63,9 @@ class MessageResponse(BaseModel):
     role: MessageRole
     content: str
     created_at: datetime
+    # Цитаты ответа Агента — те же факты, что события `citation` потока: перезагрузка
+    # страницы обязана восстановить маркеры `[n]` кликабельными. У реплик пользователя пусто.
+    citations: list[CitationEvent] = Field(default_factory=list)
 
 
 class Problem(BaseModel):
@@ -101,21 +123,6 @@ class ToolResultEvent(BaseModel):
     error: ToolFailure | None = None
     # None у отказа и у Инструмента, для которого проекции результата пока нет.
     view: EvidenceView | None = None
-
-
-class CitationEvent(BaseModel):
-    """Источник, на который опирается ответ.
-
-    Объявлено сейчас, наполняется в спринте 2 вместе с RAG: контракт потока не должен
-    меняться от появления цитат — фронт, сгенерированные типы и парсер событий переживают
-    это без правок.
-    """
-
-    type: Literal["citation"] = "citation"
-    chunk_id: str
-    document_title: str
-    snippet: str
-    source_url: str | None = None
 
 
 class DoneEvent(BaseModel):

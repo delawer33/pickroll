@@ -117,16 +117,46 @@ describe('toStreamEvent', () => {
     expect(toStreamEvent({ type: 'error', problem })).toEqual({ type: 'error', problem })
   })
 
-  it('цитату пока пропускает: связать её с карточкой нечем до корпуса', () => {
+  it('цитата приезжает фактом целиком: маркер получает карточку и текст источника', () => {
     const citation: ChatStreamEvent = {
       type: 'citation',
-      chunk_id: 'chunk-1',
+      index: 1,
+      tool_call_id: 'call_corpus',
+      chunk_id: 41,
       document_title: 'NBA rulebook',
+      locator: 'Rule 11 — Sec. I',
       snippet: 'Section II.',
-      source_url: null,
+      source_url: 'https://official.nba.com/rulebook',
     }
 
-    expect(toStreamEvent(citation)).toBeNull()
+    expect(toStreamEvent(citation)).toEqual({
+      type: 'citation',
+      citation: {
+        index: 1,
+        toolCallId: 'call_corpus',
+        chunkId: 41,
+        documentTitle: 'NBA rulebook',
+        locator: 'Rule 11 — Sec. I',
+        snippet: 'Section II.',
+        sourceUrl: 'https://official.nba.com/rulebook',
+      },
+    })
+  })
+
+  it('цитата без адреса источника не тащит null в модель', () => {
+    // Кешированный файл без стабильного URL: поле просто отсутствует, а не равно null.
+    const mapped = toStreamEvent({
+      type: 'citation',
+      index: 2,
+      tool_call_id: 'call_corpus',
+      chunk_id: 42,
+      document_title: 'NBA rulebook',
+      locator: 'Rule 11 — Sec. II',
+      snippet: 'Section III.',
+      source_url: null,
+    })
+
+    expect(mapped?.type === 'citation' && 'sourceUrl' in mapped.citation).toBe(false)
   })
 
   it('неизвестный тип события не роняет поток', () => {

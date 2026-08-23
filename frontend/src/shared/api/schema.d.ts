@@ -154,21 +154,28 @@ export interface components {
         ChatStreamEvent: components["schemas"]["TokenEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["CitationEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * CitationEvent
-         * @description Источник, на который опирается ответ.
+         * @description Источник, на который опирается ответ, — факт цитаты целиком.
          *
-         *     Объявлено сейчас, наполняется в спринте 2 вместе с RAG: контракт потока не должен
-         *     меняться от появления цитат — фронт, сгенерированные типы и парсер событий переживают
-         *     это без правок.
+         *     И вызов (`tool_call_id` — карточка Evidence, на которую укажет маркер `[n]`), и чанк
+         *     корпуса (`chunk_id`, документ, локатор): клиенту не приходится собирать цитату из двух
+         *     событий. Приходит после текста ответа, перед `done` — маркеры валидируются постфактум
+         *     по финальному тексту.
          */
         CitationEvent: {
             /** Chunk Id */
-            chunk_id: string;
+            chunk_id: number;
             /** Document Title */
             document_title: string;
+            /** Index */
+            index: number;
+            /** Locator */
+            locator: string;
             /** Snippet */
             snippet: string;
             /** Source Url */
             source_url?: string | null;
+            /** Tool Call Id */
+            tool_call_id: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -233,7 +240,7 @@ export interface components {
          * EvidenceView
          * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
          */
-        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"];
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -263,6 +270,8 @@ export interface components {
          * @description Реплика Диалога.
          */
         MessageResponse: {
+            /** Citations */
+            citations?: components["schemas"]["CitationEvent"][];
             /** Content */
             content: string;
             /**
@@ -349,6 +358,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * Quote
+         * @description Одна цитата из выдачи `search_corpus`: номер `[n]`, документ, локатор, текст.
+         */
+        Quote: {
+            /** Index */
+            index: number;
+            /** Locator */
+            locator: string;
+            /** Text */
+            text: string;
+            /** Title */
+            title: string;
+        };
+        /**
          * QuoteView
          * @description Цитата из корпуса. Объявлена заранее, наполняется вместе с RAG в спринте 2.
          */
@@ -362,15 +385,33 @@ export interface components {
             text: string;
         };
         /**
+         * QuotesView
+         * @description Выдача `search_corpus` в карточке: список цитат с номерами цитирования.
+         *
+         *     Отдельная форма, а не список `QuoteView`: у цитаты из поиска есть номер и локатор —
+         *     именно они делают карточку провенансом, а не сборником выдержек.
+         */
+        QuotesView: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "quotes";
+            /** Quotes */
+            quotes: components["schemas"]["Quote"][];
+        };
+        /**
          * SeasonAverages
          * @description Показатели за игру. Проценты попаданий — от тоталов, а не среднее процентов по матчам:
          *     среднее процентов завышало бы вклад матчей с одним броском.
+         *
+         *     Эра-зависимые метрики — null, если сезон раньше введения метрики (см. SeasonTotals).
          */
         SeasonAverages: {
             /** Assists */
             assists: number;
             /** Blocks */
-            blocks: number;
+            blocks: number | null;
             /** Field Goal Percentage */
             field_goal_percentage?: number | null;
             /** Field Goals Attempted */
@@ -386,25 +427,25 @@ export interface components {
             /** Free Throws Made */
             free_throws_made: number;
             /** Minutes */
-            minutes: number;
+            minutes: number | null;
             /** Points */
             points: number;
             /** Rebounds Defensive */
-            rebounds_defensive: number;
+            rebounds_defensive: number | null;
             /** Rebounds Offensive */
-            rebounds_offensive: number;
+            rebounds_offensive: number | null;
             /** Rebounds Total */
             rebounds_total: number;
             /** Steals */
-            steals: number;
+            steals: number | null;
             /** Three Point Percentage */
             three_point_percentage?: number | null;
             /** Three Pointers Attempted */
-            three_pointers_attempted: number;
+            three_pointers_attempted: number | null;
             /** Three Pointers Made */
-            three_pointers_made: number;
+            three_pointers_made: number | null;
             /** Turnovers */
-            turnovers: number;
+            turnovers: number | null;
         };
         /**
          * SeasonStats
@@ -421,12 +462,16 @@ export interface components {
         /**
          * SeasonTotals
          * @description Суммы за сезон.
+         *
+         *     Эра-зависимые метрики отдаются как null, если лига в тот сезон их не считала
+         *     (минуты — до 1951-52, перехваты/блоки/подборы по типам — до 1973-74, потери — до
+         *     1977-78, трёхочковые — до 1979-80). null = «метрика не считалась», не ноль.
          */
         SeasonTotals: {
             /** Assists */
             assists: number;
             /** Blocks */
-            blocks: number;
+            blocks: number | null;
             /** Field Goals Attempted */
             field_goals_attempted: number;
             /** Field Goals Made */
@@ -438,23 +483,23 @@ export interface components {
             /** Free Throws Made */
             free_throws_made: number;
             /** Minutes */
-            minutes: number;
+            minutes: number | null;
             /** Points */
             points: number;
             /** Rebounds Defensive */
-            rebounds_defensive: number;
+            rebounds_defensive: number | null;
             /** Rebounds Offensive */
-            rebounds_offensive: number;
+            rebounds_offensive: number | null;
             /** Rebounds Total */
             rebounds_total: number;
             /** Steals */
-            steals: number;
+            steals: number | null;
             /** Three Pointers Attempted */
-            three_pointers_attempted: number;
+            three_pointers_attempted: number | null;
             /** Three Pointers Made */
-            three_pointers_made: number;
+            three_pointers_made: number | null;
             /** Turnovers */
-            turnovers: number;
+            turnovers: number | null;
         };
         /**
          * TableView

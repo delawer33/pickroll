@@ -14,11 +14,21 @@ export interface Series {
   points: Array<{ x: string; y: number }>
 }
 
+/** Одна цитата из выдачи `search_corpus`: номер `[n]`, документ, локатор, текст. */
+export interface Quote {
+  index: number
+  title: string
+  locator: string
+  text: string
+}
+
 /** Результат Инструмента — то, что показывается в карточке Evidence. */
 export type ToolResult =
   | { kind: 'table'; columns: string[]; rows: string[][] }
   | { kind: 'bars'; bars: Array<{ label: string; percentile: number }> }
   | { kind: 'quote'; text: string }
+  /** Выдача поиска по корпусу: цитаты с номерами цитирования и локаторами. */
+  | { kind: 'quotes'; quotes: Quote[] }
   /** Динамика по сезонам: линия на сезон-ось, у каждой серии своё имя и слот палитры. */
   | { kind: 'series'; metric: string; unit: string; series: Series[] }
 
@@ -55,10 +65,19 @@ export interface ToolOutcome {
   error?: ToolFailure
 }
 
-/** Цитата: надстрочный номер в ответе, указывающий на карточку Evidence. */
+/** Цитата: надстрочный номер `[n]` в ответе — и всё, на что он указывает.
+ *
+ * `toolCallId` ведёт к карточке Evidence (по нему маркер кликабелен — `Message.tsx`),
+ * остальное — факт из корпуса: документ, локатор, сам текст. Форма совпадает с событием
+ * `citation` потока и с `message.citations` сохранённой Реплики. */
 export interface Citation {
   index: number
   toolCallId: string
+  chunkId: number
+  documentTitle: string
+  locator: string
+  snippet: string
+  sourceUrl?: string
 }
 
 export interface UserMessage {
