@@ -11,8 +11,30 @@ from typing import Final
 
 from court_vision.players.models import GAME_TYPE_BY_CODE, UNKNOWN_GAME_TYPE
 
-# Историческая эра системы: сезоны с 2005-06 (см. CONTEXT.md).
-FIRST_SEASON: Final = "2005-06"
+# Историческая эра системы: с основания лиги. Спайк 2026-08-23 по датасету подтвердил:
+# очки и результаты матчей заполнены с 1946-47, отступать не пришлось (см. CONTEXT.md).
+FIRST_SEASON: Final = "1946-47"
+
+# Сезон, с которого лига официально считает метрику. Датасет заполняет невведённые
+# метрики нулями, а не пустотой (проверено спайком), поэтому решает эта таблица, а не
+# пустое значение: до сезона введения метрика — None («не считалась»), не ноль.
+METRIC_INTRODUCED: Final[dict[str, str]] = {
+    "minutes": "1951-52",
+    "rebounds_offensive": "1973-74",
+    "rebounds_defensive": "1973-74",
+    "steals": "1973-74",
+    "blocks": "1973-74",
+    "turnovers": "1977-78",
+    "three_pointers_made": "1979-80",
+    "three_pointers_attempted": "1979-80",
+}
+
+
+def metric_tracked(metric: str, season: str) -> bool:
+    """Считалась ли метрика в данном сезоне. Неизвестная метрика считается всегда."""
+    introduced = METRIC_INTRODUCED.get(metric)
+    return introduced is None or season >= introduced
+
 
 # Обычно сезон NBA стартует в октябре: всё, что раньше августа, относится к сезону
 # предыдущего года. Это лишь запасной вариант — см. season_from_game_id.
@@ -159,8 +181,8 @@ PlayerRow = tuple[
 GameRow = tuple[int, str, date, str, int, int, int | None, int | None, str | None, int | None]
 BoxScoreRow = tuple[
     int, int, str, date, str, int, int, bool, bool, str | None, Decimal | None,
-    int, int, int, int, int, int, int, int, int,
-    int, int, int, int, int, int,
+    int, int, int, int | None, int | None, int | None, int | None, int | None, int,
+    int, int, int | None, int | None, int, int,
     int | None, str | None,
 ]  # fmt: skip
 
@@ -257,6 +279,10 @@ def box_score_row(row: dict[str, str]) -> BoxScoreRow | None:
     if not is_historical_era(season):
         return None
 
+    def counted(metric: str, column: str) -> int | None:
+        """Эра-зависимая метрика: до сезона введения — None, а не ноль из датасета."""
+        return parse_int_or_zero(row.get(column, "")) if metric_tracked(metric, season) else None
+
     return (
         game_id,
         player_id,
@@ -268,20 +294,20 @@ def box_score_row(row: dict[str, str]) -> BoxScoreRow | None:
         parse_bool(row.get("home", "")),
         parse_bool(row.get("win", "")),
         optional_text(row.get("startingPosition", "")),
-        parse_minutes(row.get("numMinutes", "")),
+        parse_minutes(row.get("numMinutes", "")) if metric_tracked("minutes", season) else None,
         parse_int_or_zero(row.get("points", "")),
         parse_int_or_zero(row.get("assists", "")),
         parse_int_or_zero(row.get("reboundsTotal", "")),
-        parse_int_or_zero(row.get("reboundsOffensive", "")),
-        parse_int_or_zero(row.get("reboundsDefensive", "")),
-        parse_int_or_zero(row.get("steals", "")),
-        parse_int_or_zero(row.get("blocks", "")),
-        parse_int_or_zero(row.get("turnovers", "")),
+        counted("rebounds_offensive", "reboundsOffensive"),
+        counted("rebounds_defensive", "reboundsDefensive"),
+        counted("steals", "steals"),
+        counted("blocks", "blocks"),
+        counted("turnovers", "turnovers"),
         parse_int_or_zero(row.get("foulsPersonal", "")),
         parse_int_or_zero(row.get("fieldGoalsMade", "")),
         parse_int_or_zero(row.get("fieldGoalsAttempted", "")),
-        parse_int_or_zero(row.get("threePointersMade", "")),
-        parse_int_or_zero(row.get("threePointersAttempted", "")),
+        counted("three_pointers_made", "threePointersMade"),
+        counted("three_pointers_attempted", "threePointersAttempted"),
         parse_int_or_zero(row.get("freeThrowsMade", "")),
         parse_int_or_zero(row.get("freeThrowsAttempted", "")),
         parse_int(row.get("plusMinusPoints", "")),

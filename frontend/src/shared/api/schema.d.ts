@@ -365,12 +365,14 @@ export interface components {
          * SeasonAverages
          * @description Показатели за игру. Проценты попаданий — от тоталов, а не среднее процентов по матчам:
          *     среднее процентов завышало бы вклад матчей с одним броском.
+         *
+         *     Эра-зависимые метрики — null, если сезон раньше введения метрики (см. SeasonTotals).
          */
         SeasonAverages: {
             /** Assists */
             assists: number;
             /** Blocks */
-            blocks: number;
+            blocks: number | null;
             /** Field Goal Percentage */
             field_goal_percentage?: number | null;
             /** Field Goals Attempted */
@@ -386,25 +388,25 @@ export interface components {
             /** Free Throws Made */
             free_throws_made: number;
             /** Minutes */
-            minutes: number;
+            minutes: number | null;
             /** Points */
             points: number;
             /** Rebounds Defensive */
-            rebounds_defensive: number;
+            rebounds_defensive: number | null;
             /** Rebounds Offensive */
-            rebounds_offensive: number;
+            rebounds_offensive: number | null;
             /** Rebounds Total */
             rebounds_total: number;
             /** Steals */
-            steals: number;
+            steals: number | null;
             /** Three Point Percentage */
             three_point_percentage?: number | null;
             /** Three Pointers Attempted */
-            three_pointers_attempted: number;
+            three_pointers_attempted: number | null;
             /** Three Pointers Made */
-            three_pointers_made: number;
+            three_pointers_made: number | null;
             /** Turnovers */
-            turnovers: number;
+            turnovers: number | null;
         };
         /**
          * SeasonStats
@@ -421,12 +423,16 @@ export interface components {
         /**
          * SeasonTotals
          * @description Суммы за сезон.
+         *
+         *     Эра-зависимые метрики отдаются как null, если лига в тот сезон их не считала
+         *     (минуты — до 1951-52, перехваты/блоки/подборы по типам — до 1973-74, потери — до
+         *     1977-78, трёхочковые — до 1979-80). null = «метрика не считалась», не ноль.
          */
         SeasonTotals: {
             /** Assists */
             assists: number;
             /** Blocks */
-            blocks: number;
+            blocks: number | null;
             /** Field Goals Attempted */
             field_goals_attempted: number;
             /** Field Goals Made */
@@ -438,23 +444,23 @@ export interface components {
             /** Free Throws Made */
             free_throws_made: number;
             /** Minutes */
-            minutes: number;
+            minutes: number | null;
             /** Points */
             points: number;
             /** Rebounds Defensive */
-            rebounds_defensive: number;
+            rebounds_defensive: number | null;
             /** Rebounds Offensive */
-            rebounds_offensive: number;
+            rebounds_offensive: number | null;
             /** Rebounds Total */
             rebounds_total: number;
             /** Steals */
-            steals: number;
+            steals: number | null;
             /** Three Pointers Attempted */
-            three_pointers_attempted: number;
+            three_pointers_attempted: number | null;
             /** Three Pointers Made */
-            three_pointers_made: number;
+            three_pointers_made: number | null;
             /** Turnovers */
-            turnovers: number;
+            turnovers: number | null;
         };
         /**
          * TableView
