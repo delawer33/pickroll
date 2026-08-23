@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from court_vision.agent.evidence import BLANK, TableView, project_player_stats
+from court_vision.agent.evidence import (
+    BLANK,
+    QuotesView,
+    TableView,
+    project_player_stats,
+    project_search_corpus,
+)
 from court_vision.agent.tools import evidence_for
 
 
@@ -78,6 +84,36 @@ def test_результат_не_той_формы_не_роняет_ответ(
     assert project_player_stats({"unexpected": True}) is None
 
 
+def test_выдача_поиска_становится_списком_цитат_с_номерами() -> None:
+    view = project_search_corpus(
+        {
+            "results": [
+                {
+                    "n": 3,
+                    "title": "NBA Official Playing Rules",
+                    "locator": "Rule 11 — Sec. I",
+                    "text": "Goaltending is touching the ball on its downward flight.",
+                    "url": "https://r",
+                }
+            ]
+        }
+    )
+
+    assert view is not None
+    assert isinstance(view.root, QuotesView)
+    (quote,) = view.root.quotes
+    assert (quote.index, quote.locator) == (3, "Rule 11 — Sec. I")
+
+
+def test_пустая_выдача_поиска_проекции_не_даёт() -> None:
+    """Карточка с пустым списком цитат — «данных нет», сказанное видом данных."""
+    assert project_search_corpus({"results": []}) is None
+
+
+def test_выдача_не_той_формы_не_роняет_ответ() -> None:
+    assert project_search_corpus({"chunks": [1]}) is None
+
+
 def test_отказ_инструмента_становится_причиной_а_не_проекцией() -> None:
     evidence = evidence_for(
         name="get_player_stats",
@@ -93,7 +129,7 @@ def test_отказ_инструмента_становится_причиной
 def test_неизвестный_инструмент_проекции_не_имеет() -> None:
     """До сюда такой вызов не доходит — `execute_tool` отвечает на него отказом, — но
     падать на нём нельзя: имя Инструмента приходит от модели."""
-    evidence = evidence_for(name="search_corpus", result={"chunks": []})
+    evidence = evidence_for(name="compare_players", result={"chunks": []})
 
     assert evidence.failure is None
     assert evidence.view is None

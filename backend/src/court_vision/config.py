@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     # Инструмента, самокоррекцию по кандидатам и ответ; дальше цикл почти наверняка зациклился.
     llm_max_steps: int = 6
 
+    # Эмбеддер корпуса — тоже строка litellm; по умолчанию gemini-embedding через
+    # OpenAI-совместимый шлюз (`llm_api_base`). Размерность согласована с колонкой
+    # vector(768): её смена — новая миграция и переиндексация, а не правка env.
+    embedding_model: str = "openai/google/gemini-embedding-001"
+    embedding_dimensions: int = 768
+
+    # Реранкер — выключаемая ступень поиска по корпусу: пустой ключ = выдача в порядке
+    # RRF-слияния, без внешнего вызова (контракт задокументирован в .env.example).
+    rerank_api_key: str | None = None
+    rerank_model: str = "jina_ai/jina-reranker-v2-base-multilingual"
+    # Сколько чанков уезжает вызывающей стороне после поиска (и реранка, если он включён).
+    rag_top_k: int = 8
+
     # Langfuse: без ключей трейсинг просто не включается (см. `observability.py`) — локальная
     # разработка не должна требовать внешнего сервиса. Хост пуст = облако Langfuse.
     langfuse_public_key: str = ""

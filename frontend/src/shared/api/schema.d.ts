@@ -154,21 +154,28 @@ export interface components {
         ChatStreamEvent: components["schemas"]["TokenEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["CitationEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * CitationEvent
-         * @description Источник, на который опирается ответ.
+         * @description Источник, на который опирается ответ, — факт цитаты целиком.
          *
-         *     Объявлено сейчас, наполняется в спринте 2 вместе с RAG: контракт потока не должен
-         *     меняться от появления цитат — фронт, сгенерированные типы и парсер событий переживают
-         *     это без правок.
+         *     И вызов (`tool_call_id` — карточка Evidence, на которую укажет маркер `[n]`), и чанк
+         *     корпуса (`chunk_id`, документ, локатор): клиенту не приходится собирать цитату из двух
+         *     событий. Приходит после текста ответа, перед `done` — маркеры валидируются постфактум
+         *     по финальному тексту.
          */
         CitationEvent: {
             /** Chunk Id */
-            chunk_id: string;
+            chunk_id: number;
             /** Document Title */
             document_title: string;
+            /** Index */
+            index: number;
+            /** Locator */
+            locator: string;
             /** Snippet */
             snippet: string;
             /** Source Url */
             source_url?: string | null;
+            /** Tool Call Id */
+            tool_call_id: string;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -233,7 +240,7 @@ export interface components {
          * EvidenceView
          * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
          */
-        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"];
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -263,6 +270,8 @@ export interface components {
          * @description Реплика Диалога.
          */
         MessageResponse: {
+            /** Citations */
+            citations?: components["schemas"]["CitationEvent"][];
             /** Content */
             content: string;
             /**
@@ -349,6 +358,20 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * Quote
+         * @description Одна цитата из выдачи `search_corpus`: номер `[n]`, документ, локатор, текст.
+         */
+        Quote: {
+            /** Index */
+            index: number;
+            /** Locator */
+            locator: string;
+            /** Text */
+            text: string;
+            /** Title */
+            title: string;
+        };
+        /**
          * QuoteView
          * @description Цитата из корпуса. Объявлена заранее, наполняется вместе с RAG в спринте 2.
          */
@@ -360,6 +383,22 @@ export interface components {
             kind: "quote";
             /** Text */
             text: string;
+        };
+        /**
+         * QuotesView
+         * @description Выдача `search_corpus` в карточке: список цитат с номерами цитирования.
+         *
+         *     Отдельная форма, а не список `QuoteView`: у цитаты из поиска есть номер и локатор —
+         *     именно они делают карточку провенансом, а не сборником выдержек.
+         */
+        QuotesView: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "quotes";
+            /** Quotes */
+            quotes: components["schemas"]["Quote"][];
         };
         /**
          * SeasonAverages

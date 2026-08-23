@@ -62,6 +62,60 @@ describe('ConversationView', () => {
     expect(cards[0]).toHaveAttribute('data-active', 'false')
   })
 
+  it('перезагрузка восстанавливает маркеры цитат из message.citations кликабельными', async () => {
+    // Так выглядит открытие сохранённого Диалога после F5: поток не шёл, Реплики и их
+    // цитаты пришли из API. Маркер обязан вести к той же карточке Evidence, что и в потоке.
+    const user = userEvent.setup()
+    renderWithProviders(
+      <ConversationView
+        stream={instantStream}
+        initialMessages={[
+          { id: 'message-1', role: 'user', text: 'Что такое goaltending?' },
+          {
+            id: 'message-2',
+            role: 'agent',
+            text: 'Goaltending — касание мяча на нисходящей траектории [1].',
+            citations: [
+              {
+                index: 1,
+                toolCallId: 'call_corpus',
+                chunkId: 41,
+                documentTitle: 'NBA Official Playing Rules',
+                locator: 'Rule 11 — Sec. I',
+                snippet: 'Goaltending is touching the ball on its downward flight.',
+              },
+            ],
+            streaming: false,
+          },
+        ]}
+        initialToolCalls={[
+          {
+            id: 'call_corpus',
+            name: 'search_corpus',
+            source: 'goaltending rule',
+            durationMs: 148,
+            result: {
+              kind: 'quotes',
+              quotes: [
+                {
+                  index: 1,
+                  title: 'NBA Official Playing Rules',
+                  locator: 'Rule 11 — Sec. I',
+                  text: 'Goaltending is touching the ball on its downward flight.',
+                },
+              ],
+            },
+          },
+        ]}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Source 1' }))
+
+    const rail = screen.getByRole('complementary', { name: 'Evidence' })
+    expect(within(rail).getByRole('article')).toHaveAttribute('data-active', 'true')
+  })
+
   it('событие error доходит до ленты состоянием ошибки с повтором, а не пустым ответом', async () => {
     const { user, composer } = renderConversation()
 

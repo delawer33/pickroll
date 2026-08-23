@@ -12,10 +12,12 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from contextlib import aclosing
+from datetime import UTC, datetime
 from typing import Any
 
 import litellm
 import pytest
+from litellm.types.utils import EmbeddingResponse, Usage
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -27,7 +29,7 @@ from court_vision.agent.errors import (
     ProviderRequestRejected,
     ProviderUnavailable,
 )
-from court_vision.agent.evidence import TableView
+from court_vision.agent.evidence import QuotesView, TableView
 from court_vision.agent.loop import (
     AgentAnswer,
     TokenChunk,
@@ -38,6 +40,7 @@ from court_vision.agent.loop import (
 )
 from court_vision.agent.models import LlmUsage
 from court_vision.config import Settings
+from court_vision.corpus.models import Chunk, Document
 from tests.conftest import (
     MODEL,
     RESPONSE_MODEL,
@@ -158,7 +161,7 @@ async def test_инструменты_объявлены_модели(
     await answer(session_factory, history=QUESTION, settings=agent_settings)
 
     tools = fake.calls[0]["tools"]
-    assert [tool["function"]["name"] for tool in tools] == ["get_player_stats"]
+    assert [tool["function"]["name"] for tool in tools] == ["get_player_stats", "search_corpus"]
     parameters = tools[0]["function"]["parameters"]
     assert parameters["required"] == ["player_name"]
     # Требование латиницы — часть контракта Инструмента: без него модель шлёт кириллицу,
@@ -422,7 +425,7 @@ async def test_несуществующий_инструмент_возвращ�
     provider: ProviderFactory,
 ) -> None:
     provider(
-        tool_call_reply("search_corpus", "{}"),
+        tool_call_reply("compare_players", "{}"),
         text_reply("Такого я пока не умею."),
     )
 
@@ -430,7 +433,7 @@ async def test_несуществующий_инструмент_возвращ�
 
     failure = result.tool_invocations[0].result["error"]
     assert failure["kind"] == "unknown-tool"
-    assert failure["available_tools"] == ["get_player_stats"]
+    assert failure["available_tools"] == ["get_player_stats", "search_corpus"]
 
 
 async def test_упавший_инструмент_не_обрывает_ход_агента(
@@ -646,3 +649,187 @@ async def test_учёт_переживает_провалившийся_ход_�
         await answer(session_factory, history=QUESTION, settings=agent_settings)
 
     assert len(await usage_rows(session)) == agent_settings.llm_max_steps
+
+
+# --- search_corpus и цитаты. Мини-корпус и разреженные векторы — как в test_corpus_search:
+# запрос «смотрит» вдоль нулевой оси, эмбеддер мокается на границе litellm. ---
+
+PARAPHRASE = "Teams have twenty-four seconds to attempt a field goal."
+EXACT_RULE = "The offensive team must attempt a field goal before the shot clock expires."
+WIKI = "The shot clock was introduced in the NBA in 1954 to speed up play."
+
+CORPUS_QUESTION = [Turn(role="user", content="Что такое shot clock?")]
+
+
+def _basis(index: int) -> list[float]:
+    vector = [0.0] * 768
+    vector[index] = 1.0
+    return vector
+
+
+@pytest.fixture
+async def mini_corpus(
+    seeded_database: None, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Два документа, три чанка: rulebook (парафраз + точный термин) и wikipedia (термин)."""
+    now = datetime.now(UTC)
+    async with session_factory() as db_session:
+        rulebook = Document(
+            source_type="rulebook",
+            title="NBA Official Playing Rules",
+            url="https://r",
+            content_hash="hash-rulebook",
+            fetched_at=now,
+        )
+        wikipedia = Document(
+            source_type="wikipedia",
+            title="Shot clock",
+            url="https://w",
+            content_hash="hash-wiki",
+            fetched_at=now,
+        )
+        db_session.add_all([rulebook, wikipedia])
+        await db_session.flush()
+        db_session.add_all(
+            [
+                Chunk(
+                    document_id=rulebook.id,
+                    locator="Rule 7 — Sec. I",
+                    text=PARAPHRASE,
+                    embedding=_basis(0),
+                    embedding_model="test/embedder",
+                ),
+                Chunk(
+                    document_id=rulebook.id,
+                    locator="Rule 7 — Sec. II",
+                    text=EXACT_RULE,
+                    embedding=_basis(1),
+                    embedding_model="test/embedder",
+                ),
+                Chunk(
+                    document_id=wikipedia.id,
+                    locator="History",
+                    text=WIKI,
+                    embedding=_basis(2),
+                    embedding_model="test/embedder",
+                ),
+            ]
+        )
+        await db_session.commit()
+
+
+@pytest.fixture
+def embedder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Подставной `litellm.aembedding`: вектор запроса вдоль нулевой оси, с блоком usage."""
+
+    async def fake(**kwargs: Any) -> EmbeddingResponse:
+        texts: list[str] = kwargs["input"]
+        return EmbeddingResponse(
+            model="gemini-embedding-001",
+            data=[
+                {"embedding": _basis(0), "index": index, "object": "embedding"}
+                for index in range(len(texts))
+            ],
+            usage=Usage(prompt_tokens=7, completion_tokens=0, total_tokens=7),
+        )
+
+    monkeypatch.setattr(litellm, "aembedding", fake)
+
+
+async def test_search_corpus_отдаёт_карточку_цитат_и_нумерует_результаты(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+    mini_corpus: None,
+    embedder: None,
+) -> None:
+    fake = provider(
+        tool_call_reply("search_corpus", json.dumps({"query": "shot clock", "source": "rulebook"})),
+        text_reply("Команде даётся 24 секунды на бросок [1]."),
+    )
+
+    events = [
+        event
+        async for event in stream_answer(
+            session_factory, history=CORPUS_QUESTION, settings=agent_settings
+        )
+    ]
+
+    # Проекция результата — цитаты с номерами и локаторами, а не дамп JSON.
+    resulted = next(event for event in events if isinstance(event, ToolResulted))
+    assert resulted.failure is None
+    assert resulted.view is not None
+    view = resulted.view.root
+    assert isinstance(view, QuotesView)
+    assert [quote.index for quote in view.quotes] == [1, 2]
+    assert {quote.locator for quote in view.quotes} == {"Rule 7 — Sec. I", "Rule 7 — Sec. II"}
+    assert all(quote.title == "NBA Official Playing Rules" for quote in view.quotes)
+
+    # Модель получила результат с теми же номерами `n` — по ним она и цитирует `[n]`.
+    (tool_result,) = fake.tool_results()
+    assert [item["n"] for item in tool_result["results"]] == [1, 2]
+    assert {item["text"] for item in tool_result["results"]} == {PARAPHRASE, EXACT_RULE}
+    assert all(item["url"] == "https://r" for item in tool_result["results"])
+
+    final = events[-1]
+    assert isinstance(final, AgentAnswer)
+    (citation,) = final.citations
+    assert citation.index == 1
+    assert citation.tool_call_id == "call_1"
+    assert citation.document_title == "NBA Official Playing Rules"
+    assert citation.snippet in {PARAPHRASE, EXACT_RULE}
+    assert citation.source_url == "https://r"
+    assert citation.chunk_id > 0
+
+
+async def test_маркер_сирота_и_непроцитированный_номер_не_попадают_в_цитаты(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+    mini_corpus: None,
+    embedder: None,
+) -> None:
+    """Валидация постфактум в обе стороны: `[7]` никто не выдавал — он остаётся плоским
+    текстом; выданный `2` в тексте не встретился — событие о нём не эмитится."""
+    provider(
+        tool_call_reply("search_corpus", json.dumps({"query": "shot clock", "source": "rulebook"})),
+        text_reply("Есть правило [1], а вот выдумка [7]."),
+    )
+
+    result = await answer(session_factory, history=CORPUS_QUESTION, settings=agent_settings)
+
+    assert [citation.index for citation in result.citations] == [1]
+
+
+async def test_нумерация_сквозная_через_вызовы_с_дедупом_по_чанку(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+    mini_corpus: None,
+    embedder: None,
+) -> None:
+    """Второй вызов продолжает нумерацию первого, а уже виденные чанки сохраняют свои
+    номера — иначе `[1]` из первого результата стал бы неоднозначным."""
+    fake = provider(
+        tool_call_reply("search_corpus", json.dumps({"query": "shot clock", "source": "rulebook"})),
+        tool_call_reply("search_corpus", json.dumps({"query": "shot clock"}), call_id="call_2"),
+        text_reply("Правило описано в [1], а появилось оно в 1954 году [3]."),
+    )
+
+    result = await answer(session_factory, history=CORPUS_QUESTION, settings=agent_settings)
+
+    # Второй вызов нашёл все три чанка: два из rulebook под старыми номерами, wiki — под
+    # новым третьим.
+    first, second = fake.tool_results()
+    assert [item["n"] for item in first["results"]] == [1, 2]
+    assert {item["n"] for item in second["results"]} == {1, 2, 3}
+    wiki_item = next(item for item in second["results"] if item["n"] == 3)
+    assert wiki_item["text"] == WIKI
+
+    assert [citation.index for citation in result.citations] == [1, 3]
+    by_index = {citation.index: citation for citation in result.citations}
+    assert by_index[1].tool_call_id == "call_1"
+    # Цитата указывает на вызов, который зарегистрировал чанк первым.
+    assert by_index[3].tool_call_id == "call_2"
+    assert by_index[3].document_title == "Shot clock"
+    assert by_index[3].locator == "History"

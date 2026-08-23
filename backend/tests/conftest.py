@@ -116,8 +116,8 @@ async def db_connection(postgres_url: str) -> AsyncIterator[asyncpg.Connection[A
 @pytest.fixture
 async def clean_database(db_connection: asyncpg.Connection[Any]) -> None:
     await db_connection.execute(
-        "TRUNCATE box_scores, games, players, teams, llm_usage, conversations, messages "
-        "RESTART IDENTITY CASCADE"
+        "TRUNCATE box_scores, games, players, teams, llm_usage, conversations, messages, "
+        "documents, chunks RESTART IDENTITY CASCADE"
     )
 
 

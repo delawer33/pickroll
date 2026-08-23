@@ -4,7 +4,7 @@
  * приходят из SSE и переводятся в модель ленты. Компоненты этой замены не заметили.
  */
 
-import { createConversation } from '@/features/chat/api/conversations'
+import { createConversation, toCitation } from '@/features/chat/api/conversations'
 import type {
   AnswerStream,
   StreamEvent,
@@ -78,10 +78,9 @@ export function toStreamEvent(event: ChatStreamEvent): StreamEvent | null {
     case 'error':
       return { type: 'error', problem: event.problem }
     case 'citation':
-      // Цитаты объявлены в контракте, но до спринта 2 их никто не присылает, и связать их
-      // с карточкой Evidence пока не с чем: у ленты цитата указывает на вызов Инструмента,
-      // а у корпуса — на чанк документа. Обе половины приезжают вместе с RAG.
-      return null
+      // Факт цитаты целиком: `toolCallId` делает маркер `[n]` кликабельным — он ведёт к
+      // карточке Evidence того вызова `search_corpus`, который принёс цитату.
+      return { type: 'citation', citation: toCitation(event) }
     default:
       // Неизвестный тип события — не повод рвать поток: контракт может обогнать клиент.
       return null
