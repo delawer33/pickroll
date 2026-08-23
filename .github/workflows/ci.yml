@@ -66,9 +66,13 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
-      # Версия pnpm берётся из поля packageManager в package.json — задавать её здесь
-      # вторично значит получить ERR_PNPM_BAD_PM_VERSION.
+      # Версия pnpm берётся из поля packageManager — задавать её здесь вторично значит
+      # получить ERR_PNPM_BAD_PM_VERSION. Путь указывать обязательно: `working-directory`
+      # на шаги `uses` не распространяется, и без него экшен ищет package.json в корне
+      # репозитория, где его нет, — «No pnpm version is specified».
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -90,7 +94,12 @@ jobs:
       - uses: actions/checkout@v4
       # Проверки выше гоняют тулинг на хосте, поэтому поломка Dockerfile или compose
       # без этой джобы всплыла бы только у того, кто первым поднимет систему.
+      # Именно копия, а не `--env-file .env.example`: тот подменяет только источник
+      # подстановки переменных, а `env_file: .env` внутри сервисов остаётся и падает на
+      # отсутствующем файле. Копия повторяет первый шаг README — так же начинает и человек.
+      - name: .env из примера
+        run: cp .env.example .env
       - name: docker compose config
-        run: docker compose --env-file .env.example config -q
+        run: docker compose config -q
       - name: docker compose build
-        run: docker compose --env-file .env.example build
+        run: docker compose build

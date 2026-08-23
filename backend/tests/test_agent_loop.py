@@ -123,9 +123,7 @@ async def test_цикл_отдаёт_события_по_мере_появлен
 
     events = [
         event
-        async for event in stream_answer(
-            session_factory, history=QUESTION, settings=agent_settings
-        )
+        async for event in stream_answer(session_factory, history=QUESTION, settings=agent_settings)
     ]
 
     tool_calls = [event for event in events if isinstance(event, ToolCalled)]

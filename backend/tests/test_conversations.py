@@ -256,9 +256,7 @@ async def test_список_диалогов_пагинируется_курсо
 
     first = (await api_client.get(CONVERSATIONS, params={"limit": 2})).json()
     second = (
-        await api_client.get(
-            CONVERSATIONS, params={"limit": 2, "cursor": first["next_cursor"]}
-        )
+        await api_client.get(CONVERSATIONS, params={"limit": 2, "cursor": first["next_cursor"]})
     ).json()
 
     assert [item["title"] for item in first["items"]] == ["Диалог 2", "Диалог 1"]
@@ -285,9 +283,7 @@ async def test_реплики_пагинируются_курсором(
 
     url = f"{CONVERSATIONS}/{conversation_id}/messages"
     first = (await api_client.get(url, params={"limit": 2})).json()
-    second = (
-        await api_client.get(url, params={"limit": 2, "cursor": first["next_cursor"]})
-    ).json()
+    second = (await api_client.get(url, params={"limit": 2, "cursor": first["next_cursor"]})).json()
 
     assert [item["content"] for item in first["items"]] == ["Вопрос 0", "Вопрос 1"]
     assert [item["content"] for item in second["items"]] == ["Вопрос 2"]

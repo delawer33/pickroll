@@ -52,9 +52,7 @@ class Conversation(Base):
     # выразить нельзя — пользователь вправе назвать Диалог ровно так же, и его заголовок
     # затёрло бы. Осмысленный заголовок от модели приезжает с полировкой UX.
     title: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Message(Base):
@@ -82,6 +80,4 @@ class Message(Base):
     )
     role: Mapped[MessageRole] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

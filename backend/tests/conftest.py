@@ -411,9 +411,7 @@ def provider(monkeypatch: pytest.MonkeyPatch) -> ProviderFactory:
     """Ставит подставного провайдера на границу litellm — единственную подмену в тестах
     агента. Заготовки складывает тест."""
 
-    def _install(
-        *replies: list[Any] | Exception, repeat_last: bool = False
-    ) -> FakeProvider:
+    def _install(*replies: list[Any] | Exception, repeat_last: bool = False) -> FakeProvider:
         fake = FakeProvider(replies=list(replies), repeat_last=repeat_last)
         monkeypatch.setattr(litellm, "acompletion", fake)
         return fake
