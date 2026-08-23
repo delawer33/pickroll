@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 import structlog
 from pydantic import BaseModel, Field, ValidationError
@@ -25,12 +25,20 @@ from court_vision.agent.evidence import (
     EvidenceView,
     ToolFailure,
     project_player_stats,
+    project_search_corpus,
 )
 from court_vision.agent.prompts import load_prompt
+from court_vision.agent.transport import embed
+from court_vision.corpus.rerank import maybe_rerank
+from court_vision.corpus.search import search
 from court_vision.errors import DomainError
 from court_vision.players.schemas import SEASON_PATTERN
 from court_vision.players.service import get_player_stats
 from court_vision.problems import PROBLEM_TYPE_PREFIX
+
+if TYPE_CHECKING:
+    # Только аннотации: рантайм-импорт зациклил бы модули (loop импортирует tools).
+    from court_vision.agent.loop import ToolContext
 
 log = structlog.get_logger(__name__)
 
@@ -44,7 +52,9 @@ class Tool:
     name: str
     description: str
     parameters: dict[str, Any]
-    run: Callable[[AsyncSession, Mapping[str, Any]], Awaitable[ToolResult]]
+    # Третий аргумент — контекст хода: реестр цитат и всё, что нужно Инструменту помимо
+    # сессии. Инструменты без цитат (`get_player_stats`) его просто игнорируют.
+    run: Callable[[AsyncSession, Mapping[str, Any], ToolContext], Awaitable[ToolResult]]
     # Проекция результата для карточки Evidence. Рядом с `run`, а не в отдельном реестре:
     # форма результата и его проекция меняются одним и тем же изменением Инструмента, и
     # разъехаться они могут только если живут в разных местах.
@@ -78,7 +88,9 @@ class GetPlayerStatsArgs(BaseModel):
     )
 
 
-async def run_get_player_stats(session: AsyncSession, arguments: Mapping[str, Any]) -> ToolResult:
+async def run_get_player_stats(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
     try:
         args = GetPlayerStatsArgs.model_validate(arguments)
     except ValidationError as error:
@@ -103,14 +115,87 @@ async def run_get_player_stats(session: AsyncSession, arguments: Mapping[str, An
     return stats.model_dump(mode="json")
 
 
-async def _guarded(tool: Tool, session: AsyncSession, arguments: Mapping[str, Any]) -> ToolResult:
+# Аргументы `search_corpus`. Описания — для модели, см. GetPlayerStatsArgs.
+class SearchCorpusArgs(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=256,
+        description="Поисковый запрос по-английски: корпус английский, русский запрос "
+        "не найдёт ничего. Например `shot clock violation rule`.",
+    )
+    source: Literal["rulebook", "wikipedia"] | None = Field(
+        default=None,
+        description="Сузить поиск до одного источника: `rulebook` — официальные правила "
+        "NBA, `wikipedia` — история и термины игры. Без него ищется везде.",
+    )
+
+
+async def run_search_corpus(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = SearchCorpusArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _error_result(
+            "invalid-arguments",
+            "Аргументы не прошли валидацию.",
+            {
+                "errors": [
+                    {"location": list(item["loc"]), "message": item["msg"]}
+                    for item in error.errors()
+                ]
+            },
+        )
+
+    settings = ctx.settings
+    # Эмбеддинг запроса — той же моделью и через ту же границу litellm, что и индексация:
+    # вектор запроса обязан жить в том же пространстве, что и векторы чанков.
+    (query_embedding,) = await embed(
+        ctx.session_factory,
+        model=settings.embedding_model,
+        texts=[args.query],
+        dimensions=settings.embedding_dimensions,
+        timeout=settings.llm_timeout_seconds,
+        operation="agent.search_corpus",
+        api_key=settings.llm_api_key,
+        api_base=settings.llm_api_base,
+    )
+    hits = await search(
+        session,
+        query_embedding=query_embedding,
+        query_text=args.query,
+        source=args.source,
+        top_k=settings.rag_top_k,
+    )
+    # Реранкер ест запас выдачи (см. corpus/search.py); без него лишнее отрезаем сами.
+    hits = (await maybe_rerank(hits, query=args.query, settings=settings))[: settings.rag_top_k]
+
+    # `n` — сквозной номер цитирования из реестра хода: system.md просит цитировать `[n]`,
+    # и номера в результатах двух вызовов продолжают одну нумерацию.
+    return {
+        "results": [
+            {
+                "n": ctx.citations.register(hit, tool_call_id=ctx.tool_call_id),
+                "title": hit.document_title,
+                "locator": hit.locator,
+                "text": hit.text,
+                "url": hit.url,
+            }
+            for hit in hits
+        ]
+    }
+
+
+async def _guarded(
+    tool: Tool, session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
     """Держит обещание «Инструмент не бросает» даже когда падает не он сам.
 
     Оборвавшееся соединение с БД или таймаут запроса — не повод убивать ответ агента: модель
     получает структурный отказ и может ответить пользователю тем, что уже знает.
     """
     try:
-        return await tool.run(session, arguments)
+        return await tool.run(session, arguments, ctx)
     except Exception:
         log.exception("agent.tool_failed", tool=tool.name)
         return _error_result(
@@ -134,14 +219,22 @@ GET_PLAYER_STATS: Final = Tool(
     project=project_player_stats,
 )
 
-TOOLS: Final = (GET_PLAYER_STATS,)
+SEARCH_CORPUS: Final = Tool(
+    name="search_corpus",
+    description=load_prompt("tools/search_corpus"),
+    parameters=_arguments_schema(SearchCorpusArgs),
+    run=run_search_corpus,
+    project=project_search_corpus,
+)
+
+TOOLS: Final = (GET_PLAYER_STATS, SEARCH_CORPUS)
 TOOLS_BY_NAME: Final = {tool.name: tool for tool in TOOLS}
 
 DEFINITIONS: Final = [tool.definition() for tool in TOOLS]
 
 
 async def execute_tool(
-    session: AsyncSession, *, name: str, arguments: Mapping[str, Any] | None
+    session: AsyncSession, *, name: str, arguments: Mapping[str, Any] | None, ctx: ToolContext
 ) -> ToolResult:
     """Выполняет Инструмент по имени. Неизвестное имя и нечитаемые аргументы — тоже
     результат для модели: она называет Инструмент сама и способна исправиться."""
@@ -157,7 +250,7 @@ async def execute_tool(
         return _error_result(
             "invalid-arguments", "Аргументы Инструмента должны быть JSON-объектом.", {}
         )
-    return await _guarded(tool, session, arguments)
+    return await _guarded(tool, session, arguments, ctx)
 
 
 def evidence_for(*, name: str, result: ToolResult) -> Evidence:

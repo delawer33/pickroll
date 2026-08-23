@@ -58,8 +58,28 @@ class QuoteView(BaseModel):
     text: str
 
 
+class Quote(BaseModel):
+    """Одна цитата из выдачи `search_corpus`: номер `[n]`, документ, локатор, текст."""
+
+    index: int
+    title: str
+    locator: str
+    text: str
+
+
+class QuotesView(BaseModel):
+    """Выдача `search_corpus` в карточке: список цитат с номерами цитирования.
+
+    Отдельная форма, а не список `QuoteView`: у цитаты из поиска есть номер и локатор —
+    именно они делают карточку провенансом, а не сборником выдержек.
+    """
+
+    kind: Literal["quotes"] = "quotes"
+    quotes: list[Quote]
+
+
 class EvidenceView(
-    RootModel[Annotated[TableView | BarsView | QuoteView, Field(discriminator="kind")]]
+    RootModel[Annotated[TableView | BarsView | QuoteView | QuotesView, Field(discriminator="kind")]]
 ):
     """Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`."""
 
@@ -122,6 +142,41 @@ def _season_row(season: SeasonStats) -> list[str]:
         _number(averages.assists),
         _percentage(averages.field_goal_percentage),
     ]
+
+
+class _SearchCorpusItem(BaseModel):
+    """Строка результата `search_corpus` — форма, которую собирает `run_search_corpus`."""
+
+    n: int
+    title: str
+    locator: str
+    text: str
+    url: str | None = None
+
+
+class _SearchCorpusResult(BaseModel):
+    results: list[_SearchCorpusItem]
+
+
+def project_search_corpus(result: Mapping[str, Any]) -> EvidenceView | None:
+    """Выдача поиска — список цитат с номерами `[n]` и локаторами."""
+    try:
+        found = _SearchCorpusResult.model_validate(result)
+    except ValidationError:
+        # См. project_player_stats: рассогласование схемы с самой собой — не повод ронять
+        # ответ Агента, но молча пропасть проекция тоже не должна.
+        log.warning("agent.evidence_projection_failed", tool="search_corpus", exc_info=True)
+        return None
+    if not found.results:
+        return None
+    return EvidenceView(
+        QuotesView(
+            quotes=[
+                Quote(index=item.n, title=item.title, locator=item.locator, text=item.text)
+                for item in found.results
+            ]
+        )
+    )
 
 
 def _number(value: float) -> str:

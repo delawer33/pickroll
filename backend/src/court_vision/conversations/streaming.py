@@ -23,11 +23,13 @@ from court_vision.agent.loop import (
     ToolCalled,
     ToolResulted,
     Turn,
+    TurnCitation,
     stream_answer,
 )
 from court_vision.config import Settings
 from court_vision.conversations.schemas import (
     ChatStreamEvent,
+    CitationEvent,
     DoneEvent,
     ErrorEvent,
     Problem,
@@ -119,10 +121,18 @@ async def reply_events(
                             view=view,
                         )
                     )
-                case AgentAnswer(text=text):
+                case AgentAnswer(text=text, citations=turn_citations):
+                    citations = [_citation(citation) for citation in turn_citations]
                     message_id = await _save_answer(
-                        session_factory, conversation_id=conversation_id, text=text
+                        session_factory,
+                        conversation_id=conversation_id,
+                        text=text,
+                        citations=citations,
                     )
+                    # Цитаты — после текста (маркеры валидируются по финальному тексту),
+                    # но строго до `done`: клиент вправе закрыть поток на `done`.
+                    for citation_event in citations:
+                        yield _event(citation_event)
                     yield _event(DoneEvent(message_id=message_id))
     except DomainError as error:
         log.warning(
@@ -149,20 +159,43 @@ async def reply_events(
 
 
 async def _save_answer(
-    session_factory: async_sessionmaker[AsyncSession], *, conversation_id: UUID, text: str
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    conversation_id: UUID,
+    text: str,
+    citations: list[CitationEvent],
 ) -> int:
     """Ответ агента — Реплика Диалога. Своя транзакция: вопрос закоммичен задолго до этого,
-    и одной транзакции на обоих не бывает по построению."""
+    и одной транзакции на обоих не бывает по построению. Цитаты пишутся той же транзакцией:
+    ответ с маркерами `[n]` без их фактов — недописанная Реплика."""
     async with session_factory() as session:
         message = await append_message(
-            session, conversation_id=conversation_id, role="assistant", content=text
+            session,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=text,
+            # Без `type`: это дискриминатор потока, а не часть факта цитаты.
+            citations=[citation.model_dump(mode="json", exclude={"type"}) for citation in citations]
+            or None,
         )
         await session.commit()
         return message.id
 
 
+def _citation(citation: TurnCitation) -> CitationEvent:
+    return CitationEvent(
+        index=citation.index,
+        tool_call_id=citation.tool_call_id,
+        chunk_id=citation.chunk_id,
+        document_title=citation.document_title,
+        locator=citation.locator,
+        snippet=citation.snippet,
+        source_url=citation.source_url,
+    )
+
+
 def _event(
-    event: TokenEvent | ToolCallEvent | ToolResultEvent | DoneEvent | ErrorEvent,
+    event: TokenEvent | ToolCallEvent | ToolResultEvent | CitationEvent | DoneEvent | ErrorEvent,
 ) -> ChatStreamEvent:
     """Оборачивает событие в тип-объединение потока — тот же, что описан в OpenAPI.
 

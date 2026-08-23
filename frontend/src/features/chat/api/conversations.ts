@@ -4,9 +4,9 @@
  * ленте — `agent`, и идентификаторы Реплик числовые. Компоненты про wire-формат не знают.
  */
 
-import type { Message } from '@/features/chat/model/types'
+import type { Citation, Message } from '@/features/chat/model/types'
 import type { ApiClient } from '@/shared/api/client'
-import type { ConversationSummary, MessageResponse, Page } from '@/shared/api/wire'
+import type { CitationEvent, ConversationSummary, MessageResponse, Page } from '@/shared/api/wire'
 
 const CONVERSATIONS = '/api/v1/conversations'
 
@@ -71,7 +71,26 @@ function toMessage(message: MessageResponse): Message {
   const id = `message-${String(message.message_id)}`
   return message.role === 'user'
     ? { id, role: 'user', text: message.content }
-    : // Сохранённая Реплика Агента дочитана до конца: курсора печати под ней нет, а цитаты
-      // приедут в спринте 2 вместе с корпусом.
-      { id, role: 'agent', text: message.content, citations: [], streaming: false }
+    : // Сохранённая Реплика Агента дочитана до конца: курсора печати под ней нет, а её
+      // цитаты — те же факты, что события `citation` потока: после F5 маркеры `[n]` живы.
+      {
+        id,
+        role: 'agent',
+        text: message.content,
+        citations: (message.citations ?? []).map(toCitation),
+        streaming: false,
+      }
+}
+
+/** Факт цитаты из wire-формата — общий для события потока и сохранённой Реплики. */
+export function toCitation(citation: CitationEvent): Citation {
+  return {
+    index: citation.index,
+    toolCallId: citation.tool_call_id,
+    chunkId: citation.chunk_id,
+    documentTitle: citation.document_title,
+    locator: citation.locator,
+    snippet: citation.snippet,
+    ...(citation.source_url != null && { sourceUrl: citation.source_url }),
+  }
 }

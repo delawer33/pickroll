@@ -7,6 +7,7 @@
 
 from collections.abc import Callable
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import Select, select, tuple_
@@ -15,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from court_vision.agent.loop import Turn
 from court_vision.conversations.errors import ConversationNotFound
 from court_vision.conversations.models import Conversation, Message, MessageRole
-from court_vision.conversations.schemas import ConversationSummary, MessageResponse
+from court_vision.conversations.schemas import CitationEvent, ConversationSummary, MessageResponse
 from court_vision.pagination import InvalidCursor, Page, decode_cursor, encode_cursor
 
 # Заголовок Диалога, пока его не задали: в БД лежит NULL, наружу отдаётся эта строка.
@@ -129,10 +130,17 @@ async def conversation_history(session: AsyncSession, *, conversation_id: UUID) 
 
 
 async def append_message(
-    session: AsyncSession, *, conversation_id: UUID, role: MessageRole, content: str
+    session: AsyncSession,
+    *,
+    conversation_id: UUID,
+    role: MessageRole,
+    content: str,
+    citations: list[dict[str, Any]] | None = None,
 ) -> Message:
-    """Дописывает Реплику в Диалог."""
-    message = Message(conversation_id=conversation_id, role=role, content=content)
+    """Дописывает Реплику в Диалог. `citations` — факты цитат ответа Агента; None — их нет."""
+    message = Message(
+        conversation_id=conversation_id, role=role, content=content, citations=citations
+    )
     session.add(message)
     await session.flush()
     return message
@@ -214,4 +222,6 @@ def _message(message: Message) -> MessageResponse:
         role=message.role,
         content=message.content,
         created_at=message.created_at,
+        # В БД лежат факты цитат без поля `type` — pydantic достроит дискриминатор сам.
+        citations=[CitationEvent.model_validate(item) for item in message.citations or []],
     )

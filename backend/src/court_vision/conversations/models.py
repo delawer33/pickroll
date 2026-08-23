@@ -10,10 +10,11 @@
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Index, String, Text, func, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -80,4 +81,8 @@ class Message(Base):
     )
     role: Mapped[MessageRole] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
+    # Цитаты ответа Агента — список фактов цитат (форма `CitationEvent` без `type`).
+    # JSONB, а не таблица: цитаты читаются и пишутся только вместе со своей Репликой,
+    # по chunk_id их никто не ищет. NULL — у реплик пользователя и ответов без корпуса.
+    citations: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
