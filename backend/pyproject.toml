@@ -22,6 +22,9 @@ dependencies = [
     # пишет (у litellm otel лежит в extra `proxy-runtime`). Включается только при
     # заданных ключах — см. `observability.py`.
     "langfuse>=4",
+    "sse-starlette>=2.1",
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-exporter-otlp-proto-http>=1.30",
 ]
 
 [dependency-groups]
