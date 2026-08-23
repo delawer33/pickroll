@@ -4,7 +4,11 @@
 
 Деплой в облако выполняется в конце v1 (спринт 5); до этого вся система живёт и демонстрируется локально через Docker Compose.
 
-## Спринт 1 — Ходячий скелет
+Закрытый спринт помечается ✅ и строкой под заголовком: дата, issue, состояние демо. Что из спринта осознанно не доделано — в [deferred.md](deferred.md), а не здесь: roadmap отвечает на «что дальше», а не «что мы про себя знаем».
+
+## Спринт 1 — Ходячий скелет ✅
+
+_Закрыт 2026-08-23 ([#1](https://github.com/delawer33/pickroll/issues/1), срезы [#2](https://github.com/delawer33/pickroll/issues/2)–[#8](https://github.com/delawer33/pickroll/issues/8)). Демо проходит: ответ про Леброна в 2012-13 — 26.8 очка, цифры сверены с Postgres. Отложенное вынесено в [deferred.md](deferred.md), auth-hardening — в [#9](https://github.com/delawer33/pickroll/issues/9)._
 
 Монорепо (backend + frontend), Docker Compose, CI, схема БД + seed Kaggle (сезоны с 2005-06, box scores), auth через Clerk, дизайн-токены и каркас UI, litellm + минимальный агентный цикл с одним инструментом `get_player_stats`, чат с SSE-стримингом, Langfuse подключён.
 
