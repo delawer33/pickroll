@@ -21,6 +21,9 @@ export type ChatStreamEvent = Schemas['ChatStreamEvent']
 
 export type TokenEvent = Schemas['TokenEvent']
 export type ToolCallEvent = Schemas['ToolCallEvent']
+export type ToolResultEvent = Schemas['ToolResultEvent']
+/** Результат Инструмента в форме карточки Evidence: таблица, полосы или цитата (§7.2). */
+export type EvidenceView = Schemas['EvidenceView']
 export type CitationEvent = Schemas['CitationEvent']
 export type DoneEvent = Schemas['DoneEvent']
 export type ErrorEvent = Schemas['ErrorEvent']

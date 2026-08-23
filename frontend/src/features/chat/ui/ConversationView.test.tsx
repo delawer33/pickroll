@@ -124,6 +124,26 @@ describe('ConversationView', () => {
     expect(screen.getByLabelText('Ask a question')).toBeEnabled()
   })
 
+  it('карточка вызова, оборванного на середине, не ждёт результата вечно', async () => {
+    const user = userEvent.setup()
+    // Инструмент позван, ответ оборвался — `tool_result` не приедет уже никогда.
+    const abandonedStream = async function* () {
+      await Promise.resolve()
+      yield {
+        type: 'tool_call',
+        toolCall: { id: 'call_1', name: 'get_player_stats', source: 'Nikola Jokić' },
+      } as const
+      throw new Error('The connection dropped.')
+    }
+    renderWithProviders(<ConversationView stream={abandonedStream} />)
+
+    await user.type(screen.getByLabelText('Ask a question'), 'jokic{Enter}')
+
+    const rail = screen.getByRole('complementary', { name: 'Evidence' })
+    expect(await within(rail).findByText('no-result')).toBeInTheDocument()
+    expect(within(rail).queryByText('Running…')).not.toBeInTheDocument()
+  })
+
   it('поток, кончившийся без done, не оставляет вечный курсор печати', async () => {
     const user = userEvent.setup()
     // Так выглядит таймаут прокси: тело закрылось, терминального события не было.

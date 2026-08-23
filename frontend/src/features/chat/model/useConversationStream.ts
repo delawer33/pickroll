@@ -6,6 +6,7 @@ import type {
   Message,
   StreamEvent,
   ToolCall,
+  ToolFailure,
 } from '@/features/chat/model/types'
 
 export interface UseConversationStreamOptions {
@@ -66,6 +67,29 @@ export function useConversationStream({
           : [...previous, toolCall],
       )
       return
+    }
+
+    if (event.type === 'tool_result') {
+      // Исход дописывается в карточку, открытую событием `tool_call`: карточка одна,
+      // событий про неё два. Вызова с таким `id` в рейке не окажется, только если
+      // подписались посреди ответа — тогда показывать исход всё равно не на чем.
+      const { outcome } = event
+      setToolCalls((previous) =>
+        previous.map((existing) =>
+          // Исход заменяется целиком, а не дописывается поверх: `id` от провайдера
+          // повторяется (в повторе вопроса, а без идентификаторов в ответе — на каждом
+          // вызове), и слитый с прошлым исход показал бы отказ на удавшемся вызове.
+          existing.id === outcome.id ? { ...withoutOutcome(existing), ...outcome } : existing,
+        ),
+      )
+      return
+    }
+
+    if (event.type === 'done' || event.type === 'error') {
+      // Ответ кончился — карточки, чей `tool_result` не приехал, его уже не дождутся.
+      // Без этого они навсегда показывают ожидание: та же ложь, от которой исход в
+      // событии и завёлся, только наоборот — рейка обещает результат, которого не будет.
+      setToolCalls(abandonPending)
     }
 
     setMessages((previous) =>
@@ -182,6 +206,26 @@ export function useConversationStream({
   )
 
   return { messages, toolCalls, streaming, ask, retry }
+}
+
+/** Исход вызова, о котором известно только то, что результата не будет: ответ кончился
+ * раньше, чем Инструмент вернулся. */
+const ABANDONED: ToolFailure = {
+  kind: 'no-result',
+  detail: 'The answer stopped before this Tool returned.',
+}
+
+/** Вызов без исхода — тот, чей `tool_result` не приехал. Отличается от вызова с пустым
+ * результатом: там Инструмент отработал, просто показывать нечего. */
+function abandonPending(toolCalls: ToolCall[]): ToolCall[] {
+  return toolCalls.map((toolCall) =>
+    toolCall.durationMs === undefined ? { ...toolCall, error: ABANDONED } : toolCall,
+  )
+}
+
+/** Карточка без исхода: с неё начинается вторая попытка того же вызова. */
+function withoutOutcome({ id, name, source }: ToolCall): ToolCall {
+  return { id, name, source }
 }
 
 /** Оборванный поток как событие ленты: у него тот же исход, что у события `error` от

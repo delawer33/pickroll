@@ -22,16 +22,37 @@ export type ToolResult =
   /** Динамика по сезонам: линия на сезон-ось, у каждой серии своё имя и слот палитры. */
   | { kind: 'series'; metric: string; unit: string; series: Series[] }
 
+/** Отказ Инструмента: не нашли игрока, нет данных за сезон. Ответ Агента при этом есть —
+ * он объясняет, почему цифр нет, — но в карточке отказ обязан быть виден, иначе пустой
+ * вызов в рейке неотличим от удачного. */
+export interface ToolFailure {
+  kind: string
+  detail: string
+}
+
 /** Вызов Инструмента со штампом источника и длительности: это провенанс, который
- * пользователь должен иметь возможность проверить (§7.2). */
+ * пользователь должен иметь возможность проверить (§7.2).
+ *
+ * Карточка живёт в двух состояниях, потому что событий про вызов приходит два: `tool_call`
+ * до выполнения (показать, чем занят Агент, пока ответа нет) и `tool_result` после.
+ * Незаполненные `result` и `error` — ровно первое из них, ожидание.
+ */
 export interface ToolCall {
   id: string
   name: string
   source: string
-  /** Сколько занял вызов. Необязательно: в поток длительность не уезжает — событие
-   * `tool_call` приходит до выполнения Инструмента, чтобы показать ожидание. */
+  /** Сколько занял вызов; известно вместе с исходом. */
   durationMs?: number
-  result: ToolResult
+  result?: ToolResult
+  error?: ToolFailure
+}
+
+/** Исход вызова — вторая половина карточки Evidence. */
+export interface ToolOutcome {
+  id: string
+  durationMs: number
+  result?: ToolResult
+  error?: ToolFailure
 }
 
 /** Цитата: надстрочный номер в ответе, указывающий на карточку Evidence. */
@@ -62,6 +83,7 @@ export type Message = UserMessage | AgentMessage
 export type StreamEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; toolCall: ToolCall }
+  | { type: 'tool_result'; outcome: ToolOutcome }
   | { type: 'citation'; citation: Citation }
   | { type: 'done' }
   | { type: 'error'; problem: Problem }

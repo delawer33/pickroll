@@ -10,7 +10,9 @@ describe('toStreamEvent', () => {
     expect(toStreamEvent({ type: 'token', text: '26.8' })).toEqual({ type: 'token', text: '26.8' })
   })
 
-  it('делает из вызова Инструмента карточку Evidence с аргументами', () => {
+  it('открывает карточку Evidence на вызове Инструмента — ещё без результата', () => {
+    // Событие приходит до выполнения: результата в этот момент нет ни у кого, а карточка
+    // уже нужна — она и есть «Агент пошёл за данными».
     const mapped = toStreamEvent({
       type: 'tool_call',
       tool_call_id: 'call_1',
@@ -24,14 +26,53 @@ describe('toStreamEvent', () => {
         id: 'call_1',
         name: 'get_player_stats',
         source: 'LeBron James · 2012-13',
+      },
+    })
+  })
+
+  it('дописывает в карточку результат Инструмента и длительность', () => {
+    const mapped = toStreamEvent({
+      type: 'tool_result',
+      tool_call_id: 'call_1',
+      duration_ms: 174,
+      error: null,
+      view: {
+        kind: 'table',
+        columns: ['Season', 'GP', 'Pts', 'Reb', 'Ast', 'FG%'],
+        rows: [['2012-13', '76', '26.8', '8.0', '7.3', '56.5']],
+      },
+    })
+
+    expect(mapped).toEqual({
+      type: 'tool_result',
+      outcome: {
+        id: 'call_1',
+        durationMs: 174,
         result: {
           kind: 'table',
-          columns: ['Argument', 'Value'],
-          rows: [
-            ['player_name', 'LeBron James'],
-            ['season', '2012-13'],
-          ],
+          columns: ['Season', 'GP', 'Pts', 'Reb', 'Ast', 'FG%'],
+          rows: [['2012-13', '76', '26.8', '8.0', '7.3', '56.5']],
         },
+      },
+    })
+  })
+
+  it('отказ Инструмента доезжает исходом, а не пустой карточкой', () => {
+    // Иначе вызов, на котором данных не нашлось, выглядит в рейке как удачный.
+    const mapped = toStreamEvent({
+      type: 'tool_result',
+      tool_call_id: 'call_2',
+      duration_ms: 12,
+      error: { kind: 'season-data-missing', detail: 'Данных за сезон 2005-06 нет.' },
+      view: null,
+    })
+
+    expect(mapped).toEqual({
+      type: 'tool_result',
+      outcome: {
+        id: 'call_2',
+        durationMs: 12,
+        error: { kind: 'season-data-missing', detail: 'Данных за сезон 2005-06 нет.' },
       },
     })
   })
@@ -47,6 +88,20 @@ describe('toStreamEvent', () => {
     })
 
     expect(mapped).toMatchObject({ type: 'tool_call', toolCall: { source: 'no arguments' } })
+  })
+
+  it('исход без карточки не роняет поток', () => {
+    // Подписались посреди ответа — вызова с таким id в рейке нет. Событие применяется в
+    // никуда, но поток от этого не рвётся.
+    expect(
+      toStreamEvent({
+        type: 'tool_result',
+        tool_call_id: 'call_unknown',
+        duration_ms: 3,
+        error: null,
+        view: null,
+      }),
+    ).toEqual({ type: 'tool_result', outcome: { id: 'call_unknown', durationMs: 3 } })
   })
 
   it('ошибку отдаёт вместе с телом Problem Details', () => {

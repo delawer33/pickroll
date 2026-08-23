@@ -43,7 +43,8 @@ export interface paths {
         put?: never;
         /**
          * Задать вопрос и получить ответ агента потоком
-         * @description Стримит ответ агента событиями SSE: `token`, `tool_call`, `citation`, `done`, `error`.
+         * @description Стримит ответ агента событиями SSE: `token`, `tool_call`, `tool_result`, `citation`,
+         *     `done`, `error`.
          *
          *     Сессия запроса здесь не берётся намеренно: тело потока генерируется после возврата из
          *     обработчика, и транзакция запроса висела бы открытой всё время ответа модели.
@@ -120,13 +121,37 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * Bar
+         * @description Метрика игрока относительно сравнимой выборки.
+         */
+        Bar: {
+            /** Label */
+            label: string;
+            /** Percentile */
+            percentile: number;
+        };
+        /**
+         * BarsView
+         * @description Полосы перцентилей. Объявлена заранее: форму обещает §7.2, а наполнит её
+         *     `get_player_percentiles` в спринте 3 — контракт потока от этого не поменяется.
+         */
+        BarsView: {
+            /** Bars */
+            bars: components["schemas"]["Bar"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bars";
+        };
+        /**
          * ChatStreamEvent
          * @description Событие SSE-потока ответа. Дискриминатор — поле `type`.
          *
          *     Модель существует ради контракта: в OpenAPI она даёт один тип-объединение, из которого
          *     генератор TS выводит исчерпывающий разбор событий по `type`.
          */
-        ChatStreamEvent: components["schemas"]["TokenEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["CitationEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
+        ChatStreamEvent: components["schemas"]["TokenEvent"] | components["schemas"]["ToolCallEvent"] | components["schemas"]["ToolResultEvent"] | components["schemas"]["CitationEvent"] | components["schemas"]["DoneEvent"] | components["schemas"]["ErrorEvent"];
         /**
          * CitationEvent
          * @description Источник, на который опирается ответ.
@@ -204,6 +229,11 @@ export interface components {
              */
             type: "error";
         };
+        /**
+         * EvidenceView
+         * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
+         */
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -319,6 +349,19 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * QuoteView
+         * @description Цитата из корпуса. Объявлена заранее, наполняется вместе с RAG в спринте 2.
+         */
+        QuoteView: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "quote";
+            /** Text */
+            text: string;
+        };
+        /**
          * SeasonAverages
          * @description Показатели за игру. Проценты попаданий — от тоталов, а не среднее процентов по матчам:
          *     среднее процентов завышало бы вклад матчей с одним броском.
@@ -414,6 +457,21 @@ export interface components {
             turnovers: number;
         };
         /**
+         * TableView
+         * @description Табличная проекция: колонки и уже отформатированные строки.
+         */
+        TableView: {
+            /** Columns */
+            columns: string[];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "table";
+            /** Rows */
+            rows: string[][];
+        };
+        /**
          * TokenEvent
          * @description Очередной фрагмент текста ответа. Клиент дописывает его в конец — не заменяет.
          */
@@ -445,6 +503,40 @@ export interface components {
              * @enum {string}
              */
             type: "tool_call";
+        };
+        /**
+         * ToolFailure
+         * @description Отказ Инструмента, который увидела модель — и обязан увидеть пользователь.
+         *
+         *     Без него удачный вызов и вернувшийся ни с чем в рейке выглядят одинаково: «Агент сходил
+         *     за данными» там, где данных не нашлось.
+         */
+        ToolFailure: {
+            /** Detail */
+            detail: string;
+            /** Kind */
+            kind: string;
+        };
+        /**
+         * ToolResultEvent
+         * @description Инструмент отработал: результат в форме карточки Evidence и длительность вызова.
+         *
+         *     Второе событие про тот же вызов — `tool_call_id` совпадает с `tool_call`, — потому что
+         *     первое отдаётся до выполнения. Карточка живёт в двух состояниях: ожидание, затем исход.
+         *     Без этого события удачный вызов и вернувшийся ни с чем в рейке неотличимы.
+         */
+        ToolResultEvent: {
+            /** Duration Ms */
+            duration_ms: number;
+            error?: components["schemas"]["ToolFailure"] | null;
+            /** Tool Call Id */
+            tool_call_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_result";
+            view?: components["schemas"]["EvidenceView"] | null;
         };
         /** ValidationError */
         ValidationError: {

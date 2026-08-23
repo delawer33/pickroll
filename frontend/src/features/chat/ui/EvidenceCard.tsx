@@ -1,3 +1,5 @@
+import { AlertTriangle } from 'lucide-react'
+
 import type { ToolCall, ToolResult } from '@/features/chat/model/types'
 import { SeriesResult } from '@/features/chat/ui/SeriesResult'
 import { Collapsible } from '@/shared/ui/Collapsible'
@@ -39,11 +41,48 @@ export function EvidenceCard({ toolCall, active = false }: EvidenceCardProps) {
         }
       >
         <div className="pt-2">
-          <ToolResultView result={toolCall.result} />
+          <ToolOutcomeView toolCall={toolCall} />
         </div>
       </Collapsible>
     </article>
   )
+}
+
+/** Три состояния вызова: идёт, вернул данные, вернул отказ.
+ *
+ * Отказ показывается наравне с данными и подписан причиной — иначе вызов, на котором
+ * данных не нашлось, выглядит в рейке ровно как удачный, и «Агент сходил за данными»
+ * читается там, где Агент вернулся ни с чем. */
+function ToolOutcomeView({ toolCall }: { toolCall: ToolCall }) {
+  if (toolCall.error !== undefined) {
+    return (
+      <div className="flex gap-2" role="status">
+        <AlertTriangle aria-hidden="true" size={14} className="mt-[2px] shrink-0 text-critical" />
+        <div className="min-w-0">
+          <p className="t-mono text-critical">{toolCall.error.kind}</p>
+          <p className="t-body-sm text-ink-secondary">{toolCall.error.detail}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Ожидание — это состояние, а не пустота: карточка уже стоит в рейке, потому что
+  // событие о вызове приходит до его выполнения. Признак — отсутствие длительности, а не
+  // отсутствие результата: Инструмент мог отработать и не дать проекции, и такой вызов
+  // ожиданием называть нельзя — он уже кончился.
+  if (toolCall.durationMs === undefined) {
+    return (
+      <p className="t-body-sm text-ink-muted" role="status">
+        Running…
+      </p>
+    )
+  }
+
+  if (toolCall.result === undefined) {
+    return <p className="t-body-sm text-ink-muted">Nothing to show for this result.</p>
+  }
+
+  return <ToolResultView result={toolCall.result} />
 }
 
 function ToolResultView({ result }: { result: ToolResult }) {

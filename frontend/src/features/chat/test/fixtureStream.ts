@@ -50,8 +50,23 @@ export function createMockAnswerStream(options: MockStreamOptions = {}): AnswerS
     }
 
     for (const toolCall of fixture.toolCalls) {
+      // Два события на вызов, как в настоящем потоке: сначала карточка в ожидании,
+      // затем её исход. Одним событием мок скрывал бы состояние, которое пользователь
+      // видит дольше всего.
+      const { durationMs, result, error, ...started } = toolCall
+      yield { type: 'tool_call', toolCall: started }
       await sleep(toolDelayMs)
-      yield { type: 'tool_call', toolCall }
+      yield {
+        type: 'tool_result',
+        outcome: {
+          id: toolCall.id,
+          // Фикстура без длительности отдаёт саму паузу мока, а не `0`: «0 ms» читается
+          // как мгновенный вызов, а не как неизвестное время.
+          durationMs: durationMs ?? toolDelayMs,
+          ...(result !== undefined && { result }),
+          ...(error !== undefined && { error }),
+        },
+      }
     }
 
     // Пробел остаётся при токене, иначе склеенный текст пришлось бы чинить в UI —

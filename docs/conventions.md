@@ -21,7 +21,7 @@
 - Префикс `/api/v1` с первого дня.
 - Ошибки — RFC 9457 Problem Details; единый exception handler, сервисы кидают типизированные доменные исключения.
 - Wire-формат — snake_case; TS-типы фронтенда генерируются из OpenAPI (`openapi-typescript`), руками не пишутся.
-- SSE — типизированные события (`token`, `tool_call`, `citation`, `done`, `error`), описанные в OpenAPI-моделях.
+- SSE — типизированные события (`token`, `tool_call`, `tool_result`, `citation`, `done`, `error`), описанные в OpenAPI-моделях.
 - Пагинация: cursor-based для растущих списков (дайджесты, отчёты); offset — для статичных справочников.
 
 ## Frontend

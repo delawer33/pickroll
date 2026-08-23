@@ -20,6 +20,12 @@ import structlog
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from court_vision.agent.evidence import (
+    Evidence,
+    EvidenceView,
+    ToolFailure,
+    project_player_stats,
+)
 from court_vision.agent.prompts import load_prompt
 from court_vision.errors import DomainError
 from court_vision.players.schemas import SEASON_PATTERN
@@ -39,6 +45,10 @@ class Tool:
     description: str
     parameters: dict[str, Any]
     run: Callable[[AsyncSession, Mapping[str, Any]], Awaitable[ToolResult]]
+    # Проекция результата для карточки Evidence. Рядом с `run`, а не в отдельном реестре:
+    # форма результата и его проекция меняются одним и тем же изменением Инструмента, и
+    # разъехаться они могут только если живут в разных местах.
+    project: Callable[[Mapping[str, Any]], EvidenceView | None]
 
     def definition(self) -> dict[str, Any]:
         """Описание в формате tools OpenAI — его litellm переводит под каждого провайдера."""
@@ -121,6 +131,7 @@ GET_PLAYER_STATS: Final = Tool(
     description=load_prompt("tools/get_player_stats"),
     parameters=_arguments_schema(GetPlayerStatsArgs),
     run=run_get_player_stats,
+    project=project_player_stats,
 )
 
 TOOLS: Final = (GET_PLAYER_STATS,)
@@ -147,6 +158,21 @@ async def execute_tool(
             "invalid-arguments", "Аргументы Инструмента должны быть JSON-объектом.", {}
         )
     return await _guarded(tool, session, arguments)
+
+
+def evidence_for(*, name: str, result: ToolResult) -> Evidence:
+    """Чем закончился вызов с точки зрения карточки Evidence.
+
+    Разбор `error` живёт здесь же, где эта форма собирается (`_error_result`): иначе один
+    словарь читается по ключам в двух модулях и переименование поля ломает второй молча.
+    """
+    error = result.get("error")
+    if isinstance(error, Mapping):
+        return Evidence(failure=ToolFailure(kind=str(error["kind"]), detail=str(error["detail"])))
+    tool = TOOLS_BY_NAME.get(name)
+    # Неизвестное имя Инструмента до сюда не доходит — `execute_tool` отвечает на него
+    # отказом, — но проверка нужна mypy и переживёт смену этого порядка.
+    return Evidence(view=tool.project(result) if tool is not None else None)
 
 
 def _error_result(kind: str, detail: str, extra: Mapping[str, Any]) -> ToolResult:

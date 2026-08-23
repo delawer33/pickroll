@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
+from court_vision.agent.evidence import EvidenceView, ToolFailure
 from court_vision.conversations.models import MessageRole
 
 
@@ -84,6 +85,24 @@ class ToolCallEvent(BaseModel):
     arguments: dict[str, Any] | None = None
 
 
+class ToolResultEvent(BaseModel):
+    """Инструмент отработал: результат в форме карточки Evidence и длительность вызова.
+
+    Второе событие про тот же вызов — `tool_call_id` совпадает с `tool_call`, — потому что
+    первое отдаётся до выполнения. Карточка живёт в двух состояниях: ожидание, затем исход.
+    Без этого события удачный вызов и вернувшийся ни с чем в рейке неотличимы.
+    """
+
+    type: Literal["tool_result"] = "tool_result"
+    tool_call_id: str
+    duration_ms: int
+    # Инструмент вернул отказ, который увидела модель: не нашли игрока, нет данных за
+    # сезон. Ошибкой ответа это не является — Агент отвечает и на отказ.
+    error: ToolFailure | None = None
+    # None у отказа и у Инструмента, для которого проекции результата пока нет.
+    view: EvidenceView | None = None
+
+
 class CitationEvent(BaseModel):
     """Источник, на который опирается ответ.
 
@@ -120,7 +139,7 @@ class ErrorEvent(BaseModel):
 class ChatStreamEvent(
     RootModel[
         Annotated[
-            TokenEvent | ToolCallEvent | CitationEvent | DoneEvent | ErrorEvent,
+            TokenEvent | ToolCallEvent | ToolResultEvent | CitationEvent | DoneEvent | ErrorEvent,
             Field(discriminator="type"),
         ]
     ]
