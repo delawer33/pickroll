@@ -113,7 +113,8 @@ async def send_message(
     conversation_id: ConversationId,
     history: Annotated[list[Turn], Depends(_accepted_question)],
 ) -> AsyncIterator[ChatStreamEvent]:
-    """Стримит ответ агента событиями SSE: `token`, `tool_call`, `citation`, `done`, `error`.
+    """Стримит ответ агента событиями SSE: `token`, `tool_call`, `tool_result`, `citation`,
+    `done`, `error`.
 
     Сессия запроса здесь не берётся намеренно: тело потока генерируется после возврата из
     обработчика, и транзакция запроса висела бы открытой всё время ответа модели.

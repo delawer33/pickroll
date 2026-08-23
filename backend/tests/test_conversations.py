@@ -106,6 +106,17 @@ async def test_ход_диалога_отдаётся_потоком_событ�
 
     assert events[0]["name"] == "get_player_stats"
     assert events[0]["arguments"] == {"player_name": "LeBron James", "season": "2012-13"}
+
+    # Результат вызова — второе событие про тот же `tool_call_id`: карточка Evidence
+    # показывает то, что Инструмент принёс, а не то, чем его позвали.
+    result = next(event for event in events if event["type"] == "tool_result")
+    assert result["tool_call_id"] == events[0]["tool_call_id"]
+    assert result["error"] is None
+    assert result["duration_ms"] >= 0
+    assert result["view"]["kind"] == "table"
+    assert result["view"]["rows"] == [["2012-13", "76", "26.8", "8.0", "7.3", "56.5"]]
+    assert kinds.index("tool_result") < kinds.index("done")
+
     streamed = "".join(event["text"] for event in events if event["type"] == "token")
     assert streamed == ANSWER
     assert events[-1]["message_id"] > 0
@@ -371,10 +382,14 @@ async def test_события_потока_описаны_в_openapi(app: FastAP
     assert set(schemas["ChatStreamEvent"]["discriminator"]["mapping"]) == {
         "token",
         "tool_call",
+        "tool_result",
         "citation",
         "done",
         "error",
     }
+    # Проекция результата — тоже объединение с дискриминатором: разбор карточки Evidence
+    # генератор TS выводит из него, а не из строки в документации.
+    assert set(schemas["EvidenceView"]["discriminator"]["mapping"]) == {"table", "bars", "quote"}
     # `citation` объявлен заранее и наполняется в спринте 2: контракт потока не должен
     # меняться от появления RAG.
     assert set(schemas["CitationEvent"]["properties"]) >= {"chunk_id", "document_title", "snippet"}

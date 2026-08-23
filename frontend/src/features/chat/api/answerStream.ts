@@ -5,9 +5,20 @@
  */
 
 import { createConversation } from '@/features/chat/api/conversations'
-import type { AnswerStream, StreamEvent, ToolCall } from '@/features/chat/model/types'
+import type {
+  AnswerStream,
+  StreamEvent,
+  ToolCall,
+  ToolOutcome,
+  ToolResult,
+} from '@/features/chat/model/types'
 import type { ApiClient } from '@/shared/api/client'
-import type { ChatStreamEvent, ToolCallEvent } from '@/shared/api/wire'
+import type {
+  ChatStreamEvent,
+  EvidenceView,
+  ToolCallEvent,
+  ToolResultEvent,
+} from '@/shared/api/wire'
 
 /** Идентификатор Диалога, живущий дольше самого потока.
  *
@@ -60,6 +71,8 @@ export function toStreamEvent(event: ChatStreamEvent): StreamEvent | null {
       return { type: 'token', text: event.text }
     case 'tool_call':
       return { type: 'tool_call', toolCall: toToolCall(event) }
+    case 'tool_result':
+      return { type: 'tool_result', outcome: toToolOutcome(event) }
     case 'done':
       return { type: 'done' }
     case 'error':
@@ -75,28 +88,39 @@ export function toStreamEvent(event: ChatStreamEvent): StreamEvent | null {
   }
 }
 
-/** Вызов Инструмента как карточка Evidence.
+/** Начатый вызов Инструмента — карточка Evidence в состоянии ожидания.
  *
- * Результат Инструмента в поток не уезжает — он бывает большим, а ответ Агента и без него
- * опирается на цифры. Поэтому карточка показывает то, что известно: чем и с какими
- * аргументами Агент пошёл за данными. Провенанс от этого не страдает: аргументы — ровно
- * то, что нужно, чтобы повторить запрос руками.
+ * Результата здесь ещё нет: событие приходит до выполнения. Аргументы становятся штампом
+ * источника — по ним видно, за чем Агент пошёл, и по ним же запрос повторяется руками.
  */
 function toToolCall(event: ToolCallEvent): ToolCall {
-  const entries = Object.entries(event.arguments ?? {})
+  const values = Object.values(event.arguments ?? {})
   return {
     id: event.tool_call_id,
     name: event.name,
-    source:
-      entries.length === 0
-        ? 'no arguments'
-        : entries.map(([, value]) => display(value)).join(' · '),
-    result: {
-      kind: 'table',
-      columns: ['Argument', 'Value'],
-      rows: entries.map(([key, value]) => [key, display(value)]),
-    },
+    source: values.length === 0 ? 'no arguments' : values.map(display).join(' · '),
   }
+}
+
+/** Исход вызова: результат в форме §7.2 либо отказ Инструмента.
+ *
+ * Проекция приезжает готовой к показу — форматировать числа здесь нечем: какая метрика
+ * процент, а какая счёт, знает бэкенд.
+ */
+function toToolOutcome(event: ToolResultEvent): ToolOutcome {
+  return {
+    id: event.tool_call_id,
+    durationMs: event.duration_ms,
+    ...(event.view != null && { result: toToolResult(event.view) }),
+    ...(event.error != null && { error: { kind: event.error.kind, detail: event.error.detail } }),
+  }
+}
+
+/** Проекция из контракта — она же модель карточки: формы `table`, `bars` и `quote`
+ * совпадают полем в поле, и переписывать их значило бы копировать контракт руками.
+ * `series` в контракте пока нет — его принесёт Инструмент сравнения. */
+function toToolResult(view: EvidenceView): ToolResult {
+  return view
 }
 
 function display(value: unknown): string {

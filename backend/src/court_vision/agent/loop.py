@@ -15,6 +15,7 @@ import json
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import aclosing
 from dataclasses import dataclass
+from time import perf_counter
 from typing import Any, Literal
 
 import structlog
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from court_vision.agent import tools as tool_registry
 from court_vision.agent.errors import AgentStepLimitReached, IncompleteAnswer
+from court_vision.agent.evidence import EvidenceView, ToolFailure
 from court_vision.agent.prompts import load_prompt
 from court_vision.agent.transport import LlmReply, TextDelta, ToolCall, stream
 from court_vision.config import Settings
@@ -47,6 +49,7 @@ class ToolInvocation:
     name: str
     arguments: dict[str, Any] | None
     result: tool_registry.ToolResult
+    duration_ms: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +84,23 @@ class ToolCalled:
     arguments: dict[str, Any] | None
 
 
-AgentEvent = TokenChunk | ToolCalled | AgentAnswer
+@dataclass(frozen=True, slots=True)
+class ToolResulted:
+    """Инструмент отработал. Второе событие про тот же вызов: `id` совпадает с `ToolCalled`.
+
+    Два события, а не одно с результатом: `ToolCalled` отдаётся до выполнения намеренно —
+    показать, чем занят агент, пока ответа нет. Без второго события удачный вызов и
+    вернувшийся ни с чем выглядят в рейке одинаково.
+    """
+
+    id: str
+    duration_ms: int
+    # Взаимоисключающие: у отказа проекции нет, показывать в карточке нечего кроме отказа.
+    failure: ToolFailure | None
+    view: EvidenceView | None
+
+
+AgentEvent = TokenChunk | ToolCalled | ToolResulted | AgentAnswer
 
 # Разделитель между текстовыми блоками разных шагов: модель нередко говорит «сейчас
 # посмотрю» до вызова Инструмента, и без пустой строки преамбула склеилась бы с ответом.
@@ -157,6 +176,13 @@ async def stream_answer(
             yield ToolCalled(id=call.id, name=call.name, arguments=call.parsed_arguments())
             invocation = await _invoke(session_factory, call)
             invocations.append(invocation)
+            evidence = tool_registry.evidence_for(name=call.name, result=invocation.result)
+            yield ToolResulted(
+                id=call.id,
+                duration_ms=invocation.duration_ms,
+                failure=evidence.failure,
+                view=evidence.view,
+            )
             messages.append(_tool_message(call, invocation.result))
 
     # Потолок шагов — защита от цикла, в котором модель бесконечно перевызывает Инструмент.
@@ -205,11 +231,18 @@ async def _invoke(
 ) -> ToolInvocation:
     arguments = call.parsed_arguments()
     log.info("agent.tool_call", tool=call.name, arguments=arguments)
+    # Замеряется всё вместе с ожиданием соединения из пула: в карточке стоит длительность,
+    # которую прожил пользователь, а не время одного SQL-запроса.
+    started = perf_counter()
     async with session_factory() as session:
         # Инструменты только читают — коммитить нечего; сессия закрывается сразу, чтобы
         # соединение не ждало следующего ответа модели.
         result = await tool_registry.execute_tool(session, name=call.name, arguments=arguments)
-    return ToolInvocation(name=call.name, arguments=arguments, result=result)
+    duration_ms = round((perf_counter() - started) * 1000)
+    log.info("agent.tool_result", tool=call.name, duration_ms=duration_ms)
+    return ToolInvocation(
+        name=call.name, arguments=arguments, result=result, duration_ms=duration_ms
+    )
 
 
 def _tool_message(call: ToolCall, result: tool_registry.ToolResult) -> dict[str, Any]:

@@ -45,6 +45,17 @@ export const ANSWER_EVENTS: ChatStreamEvent[] = [
     name: 'get_player_stats',
     arguments: { player_name: 'LeBron James', season: '2012-13' },
   },
+  {
+    type: 'tool_result',
+    tool_call_id: 'call_1',
+    duration_ms: 174,
+    error: null,
+    view: {
+      kind: 'table',
+      columns: ['Season', 'GP', 'Pts', 'Reb', 'Ast', 'FG%'],
+      rows: [['2012-13', '76', '26.8', '8.0', '7.3', '56.5']],
+    },
+  },
   { type: 'token', text: 'LeBron averaged ' },
   { type: 'token', text: '26.8 points per game in 2012-13.' },
   { type: 'done', message_id: 42 },

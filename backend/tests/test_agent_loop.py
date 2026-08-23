@@ -27,7 +27,15 @@ from court_vision.agent.errors import (
     ProviderRequestRejected,
     ProviderUnavailable,
 )
-from court_vision.agent.loop import AgentAnswer, TokenChunk, ToolCalled, Turn, stream_answer
+from court_vision.agent.evidence import TableView
+from court_vision.agent.loop import (
+    AgentAnswer,
+    TokenChunk,
+    ToolCalled,
+    ToolResulted,
+    Turn,
+    stream_answer,
+)
 from court_vision.agent.models import LlmUsage
 from court_vision.config import Settings
 from tests.conftest import (
@@ -299,6 +307,76 @@ async def test_модель_самокорректируется_вторым_в
     # Второй вызов уже без сезона — и до модели доехали настоящие сезоны карьеры.
     assert fake.tool_results()[1]["player"]["full_name"] == "Stephen Curry"
     assert fake.tool_results()[1]["seasons"]
+
+
+async def test_результат_инструмента_отдаётся_вторым_событием_с_проекцией(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """Карточка Evidence живёт в двух состояниях: сначала ожидание, потом результат.
+
+    Проекция — таблица по сезону на строку с настоящими цифрами из Postgres: без неё рейка
+    показывает аргументы вызова, то есть не то, что обещает §7.2 дизайн-системы.
+    """
+    provider(
+        tool_call_reply(
+            "get_player_stats",
+            json.dumps({"player_name": "LeBron James", "season": "2012-13"}),
+        ),
+        text_reply("В сезоне 2012-13 Леброн набирал 26.8 очка за игру."),
+    )
+
+    events = [
+        event
+        async for event in stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+    ]
+
+    called = [event for event in events if isinstance(event, ToolCalled)]
+    resulted = [event for event in events if isinstance(event, ToolResulted)]
+    assert [event.id for event in resulted] == [event.id for event in called]
+    assert events.index(called[0]) < events.index(resulted[0])
+
+    outcome = resulted[0]
+    assert outcome.failure is None
+    assert outcome.duration_ms >= 0
+    assert outcome.view is not None
+    view = outcome.view.root
+    assert isinstance(view, TableView)
+    assert view.columns == ["Season", "GP", "Pts", "Reb", "Ast", "FG%"]
+    assert view.rows == [["2012-13", "76", "26.8", "8.0", "7.3", "56.5"]]
+
+
+async def test_отказ_инструмента_виден_в_карточке_а_не_выглядит_удачным_вызовом(
+    session_factory: async_sessionmaker[AsyncSession],
+    agent_settings: Settings,
+    provider: ProviderFactory,
+) -> None:
+    """Сезона 2005-06 у Карри нет. Без исхода в событии эта карточка в рейке выглядела бы
+    ровно как та, что принесла карьеру Леброна, — «Агент сходил за данными» без данных."""
+    provider(
+        tool_call_reply(
+            "get_player_stats",
+            json.dumps({"player_name": "Stephen Curry", "season": "2005-06"}),
+        ),
+        text_reply("В 2005-06 Карри ещё не играл в НБА."),
+    )
+
+    events = [
+        event
+        async for event in stream_answer(
+            session_factory,
+            history=[Turn(role="user", content="Карри в 2005-06?")],
+            settings=agent_settings,
+        )
+    ]
+
+    outcome = next(event for event in events if isinstance(event, ToolResulted))
+    assert outcome.failure is not None
+    assert outcome.failure.kind == "season-data-missing"
+    assert outcome.failure.detail
+    # У отказа проекции нет: показывать в карточке нечего, кроме самого отказа.
+    assert outcome.view is None
 
 
 async def test_кириллица_в_имени_не_роняет_цикл(

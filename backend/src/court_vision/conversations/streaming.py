@@ -17,7 +17,14 @@ from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from court_vision.agent.loop import AgentAnswer, TokenChunk, ToolCalled, Turn, stream_answer
+from court_vision.agent.loop import (
+    AgentAnswer,
+    TokenChunk,
+    ToolCalled,
+    ToolResulted,
+    Turn,
+    stream_answer,
+)
 from court_vision.config import Settings
 from court_vision.conversations.schemas import (
     ChatStreamEvent,
@@ -26,6 +33,7 @@ from court_vision.conversations.schemas import (
     Problem,
     TokenEvent,
     ToolCallEvent,
+    ToolResultEvent,
 )
 from court_vision.conversations.service import (
     append_message,
@@ -78,8 +86,9 @@ async def reply_events(
     settings: Settings,
     instance: str,
 ) -> AsyncIterator[ChatStreamEvent]:
-    """События ответа: `token` по мере генерации, `tool_call` перед походом за данными,
-    `done` после сохранения ответа — либо `error` вместо всего остального.
+    """События ответа: `token` по мере генерации, `tool_call` перед походом за данными и
+    `tool_result` после него, `done` после сохранения ответа — либо `error` вместо всего
+    остального.
 
     Любая ошибка становится событием, а не обрывом соединения: заголовки ответа ушли ещё до
     первого токена, статус уже `200`, и оборванный поток клиент не отличил бы от сетевого
@@ -100,6 +109,15 @@ async def reply_events(
                 case ToolCalled(id=call_id, name=name, arguments=arguments):
                     yield _event(
                         ToolCallEvent(tool_call_id=call_id, name=name, arguments=arguments)
+                    )
+                case ToolResulted(id=call_id, duration_ms=duration_ms, failure=failure, view=view):
+                    yield _event(
+                        ToolResultEvent(
+                            tool_call_id=call_id,
+                            duration_ms=duration_ms,
+                            error=failure,
+                            view=view,
+                        )
                     )
                 case AgentAnswer(text=text):
                     message_id = await _save_answer(
@@ -143,7 +161,9 @@ async def _save_answer(
         return message.id
 
 
-def _event(event: TokenEvent | ToolCallEvent | DoneEvent | ErrorEvent) -> ChatStreamEvent:
+def _event(
+    event: TokenEvent | ToolCallEvent | ToolResultEvent | DoneEvent | ErrorEvent,
+) -> ChatStreamEvent:
     """Оборачивает событие в тип-объединение потока — тот же, что описан в OpenAPI.
 
     Имени события (`event:` в SSE) у фреймов нет намеренно: тип лежит внутри JSON полем
