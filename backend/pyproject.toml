@@ -30,6 +30,8 @@ dependencies = [
     "httpx>=0.28",
     "opentelemetry-sdk>=1.30",
     "opentelemetry-exporter-otlp-proto-http>=1.30",
+    # Ретривал-eval: золотые запросы лежат в backend/evals/golden.yaml.
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
@@ -42,6 +44,7 @@ dev = [
     "testcontainers[postgres]>=4.9",
     "pre-commit>=4.0",
     "asyncpg-stubs>=0.31.3",
+    "types-pyyaml>=6.0",
 ]
 
 [build-system]
