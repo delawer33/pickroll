@@ -19,6 +19,7 @@ import structlog
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from court_vision.agent.errors import ProviderRequestRejected, ProviderUnavailable
 from court_vision.agent.transport import embed
 from court_vision.config import Settings
 from court_vision.corpus.chunking import chunk_document
@@ -33,6 +34,7 @@ from court_vision.corpus.sources import (
 log = structlog.get_logger(__name__)
 
 DEFAULT_CACHE_DIR: Final = Path("data/corpus")
+_MAX_FAILED_STREAK: Final = 5
 
 
 class ForeignEmbeddingModelError(Exception):
@@ -73,8 +75,21 @@ async def ingest(
 
     indexed = 0
     skipped = 0
+    failed_streak = 0
     async for raw in _documents(session_factory, source, cache_dir):
-        if await _ingest_document(session_factory, settings, raw, reindex=reindex):
+        try:
+            done = await _ingest_document(session_factory, settings, raw, reindex=reindex)
+        except (ProviderUnavailable, ProviderRequestRejected) as error:
+            # Транзиентный сбой эмбеддингов не должен убивать многочасовой прогон:
+            # документ скипаем (повторный запуск доберёт по хешу), но серия подряд —
+            # провайдер лёг, продолжать бессмысленно.
+            failed_streak += 1
+            log.warning("corpus.document_failed", title=raw.title, cause=type(error).__name__)
+            if failed_streak >= _MAX_FAILED_STREAK:
+                raise
+            continue
+        failed_streak = 0
+        if done:
             indexed += 1
         else:
             skipped += 1
