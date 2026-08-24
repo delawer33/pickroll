@@ -203,6 +203,9 @@ async def embed(
                     model=model,
                     input=batch,
                     dimensions=dimensions,
+                    # litellm белым списком режет dimensions для незнакомых openai-моделей,
+                    # хотя шлюз параметр поддерживает — пропускаем явно.
+                    allowed_openai_params=["dimensions"],
                     timeout=timeout,
                     # См. `stream`: None вместо пустых строк.
                     api_key=api_key or None,
