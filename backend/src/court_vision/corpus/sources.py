@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,6 +41,13 @@ _WIKIPEDIA_PAGE: Final = "https://en.wikipedia.org/wiki/{title}"
 
 # CDN NBA отвечает 403 на «неузнаваемые» клиенты — представляемся браузером.
 _USER_AGENT: Final = "Mozilla/5.0 (X11; Linux x86_64) court-vision/0.1"
+# Wikimedia, наоборот, банит браузероподобные UA без контакта (403 на burst) —
+# политика требует описательный UA: https://meta.wikimedia.org/wiki/User-Agent_policy
+_WIKIPEDIA_USER_AGENT: Final = (
+    "CourtVision/0.1 (https://github.com/delawer33/pickroll) python-httpx"
+)
+_WIKIPEDIA_DELAY_SECONDS: Final = 0.1
+_WIKIPEDIA_BACKOFF_SECONDS: Final = 30.0
 
 _TIMEOUT_SECONDS: Final = 30.0
 
@@ -94,14 +102,37 @@ def iter_wikipedia(titles: Iterable[str]) -> Iterator[RawDocument]:
     404 — пропуск с логом, а не ошибка: список заголовков собирается эвристикой из БД,
     и часть игроков просто не имеет статьи (или называется иначе). Редиректы
     разыменовываются на один шаг — этого хватает на "LeBron James" → каноническое имя.
+    Прочие HTTP-сбои тоже скип: ingest идемпотентен, пропуски добирает повторный запуск.
     """
     with httpx.Client(
-        headers={"User-Agent": _USER_AGENT}, timeout=_TIMEOUT_SECONDS, follow_redirects=True
+        headers={"User-Agent": _WIKIPEDIA_USER_AGENT},
+        timeout=_TIMEOUT_SECONDS,
+        follow_redirects=True,
     ) as client:
         for title in titles:
-            document = _fetch_article(client, title, redirects_left=1)
+            document = _fetch_article_resilient(client, title)
             if document is not None:
                 yield document
+            time.sleep(_WIKIPEDIA_DELAY_SECONDS)
+
+
+def _fetch_article_resilient(client: httpx.Client, title: str) -> RawDocument | None:
+    """403/429 — анти-абьюз Wikimedia: одна пауза и ретрай; остальное — скип с логом."""
+    for attempt in (1, 2):
+        try:
+            return _fetch_article(client, title, redirects_left=1)
+        except httpx.HTTPStatusError as error:
+            status = error.response.status_code
+            if attempt == 1 and status in (403, 429):
+                log.warning("corpus.wikipedia_throttled", title=title, status=status)
+                time.sleep(_WIKIPEDIA_BACKOFF_SECONDS)
+                continue
+            log.warning("corpus.wikipedia_failed", title=title, status=status)
+            return None
+        except httpx.HTTPError as error:
+            log.warning("corpus.wikipedia_failed", title=title, cause=type(error).__name__)
+            return None
+    return None
 
 
 def _fetch_article(client: httpx.Client, title: str, *, redirects_left: int) -> RawDocument | None:
