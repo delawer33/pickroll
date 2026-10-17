@@ -8,7 +8,10 @@
 #
 # Поля: id, category, question, reference, expect_tools (подмножество, обязано быть
 # вызвано), expect_sources (rulebook/wikipedia — Цитаты оттуда обязаны быть),
-# must_not_refuse (по умолчанию true; false — когда честный ответ и есть «нельзя»).
+# must_not_refuse (по умолчанию true; false — когда честный ответ и есть «нельзя»),
+# expect_documents (заголовки статей Wikipedia как в корпусе — обязательны при
+# expect_sources: wikipedia; по ним и по сезонам из question собирается Eval-срез, после
+# правки набора его надо пересобрать: `python -m court_vision.eval_slice build`).
 
 # --- stats: сезонная статистика через get_player_stats ---
 - id: stats-lebron-2012-13
@@ -124,6 +127,7 @@
     - "всю карьеру провёл в Лос-Анджелес Лейкерс"
   expect_tools: [get_player_stats, search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Kobe Bryant]
 
 - id: bio-jordan-baseball
   category: biography
@@ -134,6 +138,7 @@
     - "вернулся в НБА в 1995"
   expect_tools: [search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Michael Jordan]
 
 - id: bio-curry-father
   category: biography
@@ -142,6 +147,7 @@
     - "отец — Делл Карри, бывший игрок НБА (защитник), долго выступал за Шарлотт"
   expect_tools: [search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Stephen Curry, Dell Curry]
 
 - id: bio-jokic-path
   category: biography
@@ -151,6 +157,7 @@
     - "выбран на драфте 2014 во втором раунде (41-м номером) Денвер Наггетс"
   expect_tools: [search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Nikola Jokić]
 
 - id: bio-magic-hiv
   category: biography
@@ -159,6 +166,7 @@
     - "в ноябре 1991 объявил, что у него ВИЧ, и завершил карьеру"
   expect_tools: [search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Magic Johnson]
 
 # --- old_era: ранние эпохи, метрики которые не считались (null != ноль) ---
 - id: old-wilt-100
@@ -169,6 +177,7 @@
     - "в сезоне 1961-62 в среднем 50.4 очка и 25.7 подбора за игру"
   expect_tools: [get_player_stats, search_corpus]
   expect_sources: [wikipedia]
+  expect_documents: [Wilt Chamberlain]
 
 - id: old-russell-1964-65
   category: old_era

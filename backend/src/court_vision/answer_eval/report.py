@@ -188,6 +188,15 @@ def _num(value: float | None) -> str:
     return "—" if value is None else f"{value:.2f}"
 
 
+def _data_line(slice_info: dict[str, Any] | None) -> str:
+    if slice_info is None:
+        return "база из `DATABASE_URL`"
+    return (
+        f"Eval-срез ({len(slice_info['seasons'])} сезонов, "
+        f"{len(slice_info['documents'])} документов корпуса)"
+    )
+
+
 def to_markdown(
     results: list[CaseResult],
     summary: Summary,
@@ -202,6 +211,7 @@ def to_markdown(
         "",
         f"Модель агента: `{meta['agent_model']}`, судья: `{meta['judge_model']}`, "
         f"вопросов: {overall.total}.",
+        f"Данные: {_data_line(meta.get('slice'))}.",
         "",
         f"**Pass rate: {overall.passed}/{overall.total} = {overall.pass_rate:.1%}**, "
         f"correctness {_num(overall.avg_correctness)}, grounding {_num(overall.avg_grounding)} "

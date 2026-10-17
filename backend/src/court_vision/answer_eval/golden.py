@@ -40,6 +40,10 @@ class GoldenAnswer(BaseModel):
     expect_tools: tuple[str, ...] = ()
     # Источники, цитаты из которых обязаны быть в ответе.
     expect_sources: tuple[SourceName, ...] = ()
+    # Заголовки статей Wikipedia, без которых на вопрос не ответить: по ним сборщик Eval-среза
+    # решает, какие документы корпуса класть в срез. Rulebook в срез идёт целиком и здесь не
+    # перечисляется.
+    expect_documents: tuple[str, ...] = ()
     # False — вопрос, на который честный ответ и есть отказ (нет такого игрока, нет данных).
     must_not_refuse: bool = True
 
@@ -49,6 +53,10 @@ class GoldenAnswer(BaseModel):
         # search_corpus невыполним по построению, и ловить это лучше при загрузке набора.
         if self.expect_sources and "search_corpus" not in self.expect_tools:
             raise ValueError(f"{self.id}: expect_sources требует search_corpus в expect_tools")
+        # Вопрос, который ждёт Цитат Wikipedia, обязан назвать статьи: иначе сборщик среза
+        # не узнает, что класть в срез, и на срезе вопрос окажется без источника.
+        if "wikipedia" in self.expect_sources and not self.expect_documents:
+            raise ValueError(f"{self.id}: expect_sources: wikipedia требует expect_documents")
         return self
 
 

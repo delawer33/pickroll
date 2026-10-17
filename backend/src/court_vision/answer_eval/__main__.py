@@ -5,6 +5,9 @@
 JSON + markdown в `backend/evals/reports/` (каталог игнорируется git). Код выхода 1 — прогон
 хуже коммитимых порогов (`evals/answers_thresholds.yaml`).
 
+`--slice` — прогон на герметичном Eval-срезе (`python -m court_vision.eval_slice`): база из
+`DATABASE_URL` должна быть пустой, срез заливается в неё сам.
+
 Прогон стоит денег: пока итерируешь над одной проблемой — `--category` или `--id`.
 """
 
@@ -15,6 +18,7 @@ import asyncio
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -36,6 +40,9 @@ from court_vision.answer_eval.runner import (
 )
 from court_vision.config import Settings, get_settings
 from court_vision.db import create_engine, create_session_factory
+from court_vision.eval_slice.config import DEFAULT_SLICE_DIR
+from court_vision.eval_slice.load import check_run_fits_slice, prepare_slice
+from court_vision.eval_slice.manifest import read_manifest
 from court_vision.logging import configure_logging
 from court_vision.observability import configure_llm_observability
 
@@ -53,10 +60,20 @@ async def run(
     thresholds_path: Path | None,
     report_dir: Path,
     concurrency: int,
+    slice_dir: Path | None = None,
 ) -> int:
     all_cases = load_answers(answers_path)
     cases = select(all_cases, categories=categories, ids=ids)
     full_run = len(cases) == len(all_cases)
+
+    slice_info: dict[str, Any] | None = None
+    if slice_dir is not None:
+        # Срез проверяется до загрузки и до первого платного вызова: устаревший или с чужим
+        # эмбеддером он дал бы прогон, в котором агент честно отвечает «данных нет».
+        manifest = read_manifest(slice_dir)
+        check_run_fits_slice(manifest, cases, embedding_model=settings.embedding_model)
+        await prepare_slice(settings.database_url, slice_dir)
+        slice_info = {"seasons": list(manifest.seasons), "documents": list(manifest.documents)}
 
     configure_llm_observability(settings)
     engine = create_engine(settings.database_url)
@@ -87,6 +104,7 @@ async def run(
         "judge_model": settings.eval_judge_model,
         "full_run": full_run,
         "filters": {"category": categories, "id": ids},
+        "slice": slice_info,
     }
     path = report.write_reports(
         report_dir, results, summary, usage, meta=meta, violations=violations
@@ -133,6 +151,15 @@ def main() -> None:
         "--no-thresholds", action="store_true", help="не сравнивать с порогами (код выхода 0)"
     )
     parser.add_argument("--report-dir", type=Path, default=DEFAULT_REPORT_DIR)
+    parser.add_argument(
+        "--slice",
+        action="store_true",
+        help="прогон на Eval-срезе: перед вопросами миграции и заливка среза в ПУСТУЮ базу "
+        "из DATABASE_URL (в базу с другими данными не грузит)",
+    )
+    parser.add_argument(
+        "--slice-dir", type=Path, default=DEFAULT_SLICE_DIR, help="каталог среза для --slice"
+    )
     args = parser.parse_args()
 
     configure_logging()
@@ -145,6 +172,7 @@ def main() -> None:
             thresholds_path=None if args.no_thresholds else args.thresholds,
             report_dir=args.report_dir,
             concurrency=args.concurrency,
+            slice_dir=args.slice_dir if args.slice else None,
         )
     )
     sys.exit(code)
