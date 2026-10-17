@@ -120,6 +120,51 @@ describe('EvidenceCard', () => {
     expect(screen.queryByText('0')).not.toBeInTheDocument()
   })
 
+  it('сравнение: игроки колонками, значение и перцентиль в ячейке, прочерк для не считавшейся', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          id: 'call_compare',
+          name: 'compare_players',
+          source: 'Michael Jordan 1995-96, LeBron James 2012-13',
+          durationMs: 88,
+          result: {
+            kind: 'comparison',
+            players: [
+              { name: 'Michael Jordan', season: '1995-96', qualified: true, sample_size: 190 },
+              { name: 'LeBron James', season: '2012-13', qualified: false, sample_size: 220 },
+            ],
+            metrics: [
+              {
+                label: 'Pts',
+                cells: [
+                  { value: '30.4', percentile: 99 },
+                  { value: '26.8', percentile: 97 },
+                ],
+              },
+              {
+                label: '3P%',
+                cells: [
+                  { value: '42.7', percentile: 91 },
+                  { value: '—', percentile: null },
+                ],
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByRole('columnheader', { name: 'Michael Jordan 1995-96' })).toBeVisible()
+    expect(screen.getByRole('columnheader', { name: 'LeBron James 2012-13' })).toBeVisible()
+    expect(screen.getByText('30.4 (99)')).toBeVisible()
+    expect(screen.getByText('26.8 (97)')).toBeVisible()
+    // Прочерк, а не «0 (0)»: ноль читался бы как худший Перцентиль.
+    expect(screen.getByText('—', { selector: 'td' })).toBeVisible()
+    // Неквалифицированный игрок назван в предупреждении.
+    expect(screen.getByText(/Not qualified/)).toHaveTextContent('LeBron James 2012-13')
+  })
+
   it('отказ Инструмента подписан причиной и не выглядит удачным вызовом', () => {
     // Карточка вызова без данных обязана отличаться от карточки с данными: иначе рейка
     // говорит «Агент сходил за данными» там, где Агент вернулся ни с чем.

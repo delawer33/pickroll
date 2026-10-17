@@ -184,6 +184,57 @@ export interface components {
             type: "citation";
         };
         /**
+         * ComparisonCell
+         * @description Значение метрики игрока и его Перцентиль.
+         */
+        ComparisonCell: {
+            /** Percentile */
+            percentile: number | null;
+            /** Value */
+            value: string;
+        };
+        /**
+         * ComparisonMetric
+         * @description Строка сравнения: метрика и по ячейке на каждого игрока.
+         */
+        ComparisonMetric: {
+            /** Cells */
+            cells: components["schemas"]["ComparisonCell"][];
+            /** Label */
+            label: string;
+        };
+        /**
+         * ComparisonPlayer
+         * @description Колонка сравнения: игрок в своём сезоне.
+         */
+        ComparisonPlayer: {
+            /** Name */
+            name: string;
+            /** Qualified */
+            qualified: boolean;
+            /** Sample Size */
+            sample_size: number;
+            /** Season */
+            season: string;
+        };
+        /**
+         * ComparisonView
+         * @description Сравнение игроков: игроки × метрики, значения и Перцентили.
+         *
+         *     Один объект кормит и side-by-side таблицу, и radar-чарт: у них общие оси и общие числа.
+         */
+        ComparisonView: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "comparison";
+            /** Metrics */
+            metrics: components["schemas"]["ComparisonMetric"][];
+            /** Players */
+            players: components["schemas"]["ComparisonPlayer"][];
+        };
+        /**
          * ConversationCreate
          * @description Заголовок можно не присылать: он подставится из первого вопроса.
          */
@@ -241,7 +292,7 @@ export interface components {
          * EvidenceView
          * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
          */
-        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"];
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["ComparisonView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */

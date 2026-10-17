@@ -129,7 +129,7 @@ def test_отказ_инструмента_становится_причиной
 def test_неизвестный_инструмент_проекции_не_имеет() -> None:
     """До сюда такой вызов не доходит — `execute_tool` отвечает на него отказом, — но
     падать на нём нельзя: имя Инструмента приходит от модели."""
-    evidence = evidence_for(name="compare_players", result={"chunks": []})
+    evidence = evidence_for(name="no_such_tool", result={"chunks": []})
 
     assert evidence.failure is None
     assert evidence.view is None

@@ -90,6 +90,25 @@ describe('toStreamEvent', () => {
     expect(mapped).toMatchObject({ type: 'tool_call', toolCall: { source: 'no arguments' } })
   })
 
+  it('список игроков в аргументах читается штампом, а не JSON', () => {
+    const mapped = toStreamEvent({
+      type: 'tool_call',
+      tool_call_id: 'call_3',
+      name: 'compare_players',
+      arguments: {
+        players: [
+          { player_name: 'Stephen Curry', season: '2015-16' },
+          { player_name: 'Damian Lillard', season: null },
+        ],
+      },
+    })
+
+    expect(mapped).toMatchObject({
+      type: 'tool_call',
+      toolCall: { source: 'Stephen Curry 2015-16, Damian Lillard' },
+    })
+  })
+
   it('исход без карточки не роняет поток', () => {
     // Подписались посреди ответа — вызова с таким id в рейке нет. Событие применяется в
     // никуда, но поток от этого не рвётся.

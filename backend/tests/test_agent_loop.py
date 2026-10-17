@@ -164,6 +164,7 @@ async def test_инструменты_объявлены_модели(
     assert [tool["function"]["name"] for tool in tools] == [
         "get_player_stats",
         "get_player_percentiles",
+        "compare_players",
         "search_corpus",
     ]
     parameters = tools[0]["function"]["parameters"]
@@ -429,7 +430,7 @@ async def test_несуществующий_инструмент_возвращ�
     provider: ProviderFactory,
 ) -> None:
     provider(
-        tool_call_reply("compare_players", "{}"),
+        tool_call_reply("no_such_tool", "{}"),
         text_reply("Такого я пока не умею."),
     )
 
@@ -438,6 +439,7 @@ async def test_несуществующий_инструмент_возвращ�
     failure = result.tool_invocations[0].result["error"]
     assert failure["kind"] == "unknown-tool"
     assert failure["available_tools"] == [
+        "compare_players",
         "get_player_percentiles",
         "get_player_stats",
         "search_corpus",

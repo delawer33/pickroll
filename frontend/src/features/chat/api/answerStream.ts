@@ -122,6 +122,20 @@ function toToolResult(view: EvidenceView): ToolResult {
   return view
 }
 
+/** Аргумент для штампа источника. Список записей (`compare_players`) читается как
+ * «Stephen Curry 2015-16, Damian Lillard», а не как JSON. */
 function display(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value)
+  if (typeof value === 'string') {
+    return value
+  }
+  if (Array.isArray(value)) {
+    return value.map(display).join(', ')
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value)
+      .filter((item) => item !== null)
+      .map(display)
+      .join(' ')
+  }
+  return JSON.stringify(value)
 }

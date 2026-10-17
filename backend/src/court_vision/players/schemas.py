@@ -122,3 +122,9 @@ class PlayerPercentilesResponse(BaseModel):
     # Сколько Квалифицированных игроков в выборке сезона.
     sample_size: int
     metrics: list[MetricPercentile]
+
+
+class PlayerComparisonResponse(BaseModel):
+    """Перцентили нескольких игроков, каждого в своём сезоне, в порядке запроса."""
+
+    players: list[PlayerPercentilesResponse]

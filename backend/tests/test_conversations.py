@@ -395,6 +395,7 @@ async def test_события_потока_описаны_в_openapi(app: FastAP
     assert set(schemas["EvidenceView"]["discriminator"]["mapping"]) == {
         "table",
         "bars",
+        "comparison",
         "quote",
         "quotes",
     }

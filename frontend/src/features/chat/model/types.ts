@@ -22,6 +22,25 @@ export interface Quote {
   text: string
 }
 
+/** Игрок в сезоне — колонка сравнения. `qualified: false` — Перцентили ненадёжны. */
+export interface ComparisonPlayer {
+  name: string
+  season: string
+  qualified: boolean
+  sample_size: number
+}
+
+/** Значение уже строка; `percentile: null` и прочерк — метрика в сезоне не считалась. */
+export interface ComparisonCell {
+  value: string
+  percentile: number | null
+}
+
+export interface ComparisonMetric {
+  label: string
+  cells: ComparisonCell[]
+}
+
 /** Результат Инструмента — то, что показывается в карточке Evidence. */
 export type ToolResult =
   | { kind: 'table'; columns: string[]; rows: string[][] }
@@ -32,6 +51,8 @@ export type ToolResult =
       /** Сезон, выборка и предупреждение о неквалифицированном игроке. */
       caption?: string | null
     }
+  /** Сравнение игроков: колонки — игроки, строки — метрики, ячейки идут параллельно игрокам. */
+  | { kind: 'comparison'; players: ComparisonPlayer[]; metrics: ComparisonMetric[] }
   | { kind: 'quote'; text: string }
   /** Выдача поиска по корпусу: цитаты с номерами цитирования и локаторами. */
   | { kind: 'quotes'; quotes: Quote[] }

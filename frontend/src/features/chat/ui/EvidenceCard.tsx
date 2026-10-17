@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react'
 
 import type { ToolCall, ToolResult } from '@/features/chat/model/types'
+import { ComparisonResult } from '@/features/chat/ui/ComparisonResult'
 import { SeriesResult } from '@/features/chat/ui/SeriesResult'
 import { Collapsible } from '@/shared/ui/Collapsible'
 import { DataTable } from '@/shared/ui/DataTable'
@@ -118,6 +119,10 @@ function ToolResultView({ result }: { result: ToolResult }) {
 
   if (result.kind === 'table') {
     return <DataTable columns={result.columns} rows={result.rows} />
+  }
+
+  if (result.kind === 'comparison') {
+    return <ComparisonResult players={result.players} metrics={result.metrics} />
   }
 
   if (result.kind === 'series') {

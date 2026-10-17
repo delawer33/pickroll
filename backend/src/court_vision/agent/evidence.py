@@ -20,6 +20,8 @@ import structlog
 from pydantic import BaseModel, Field, RootModel, ValidationError
 
 from court_vision.players.schemas import (
+    MetricPercentile,
+    PlayerComparisonResponse,
     PlayerPercentilesResponse,
     PlayerStatsResponse,
     SeasonStats,
@@ -58,6 +60,45 @@ class BarsView(BaseModel):
     caption: str | None = None
 
 
+class ComparisonPlayer(BaseModel):
+    """Колонка сравнения: игрок в своём сезоне."""
+
+    name: str
+    season: str
+    # False — Перцентили игрока посчитаны относительно выборки, но малая игровая выборка
+    # делает их ненадёжными: карточка обязана это показать рядом с именем.
+    qualified: bool
+    sample_size: int
+
+
+class ComparisonCell(BaseModel):
+    """Значение метрики игрока и его Перцентиль."""
+
+    # Уже строка: какая метрика процент, а какая счёт, знает бэкенд. Прочерк — не считалась.
+    value: str
+    # None — метрика в сезоне не считалась: карточка рисует прочерк, а не нулевую точку.
+    percentile: int | None = Field(ge=0, le=100)
+
+
+class ComparisonMetric(BaseModel):
+    """Строка сравнения: метрика и по ячейке на каждого игрока."""
+
+    label: str
+    # Параллельно `ComparisonView.players`.
+    cells: list[ComparisonCell]
+
+
+class ComparisonView(BaseModel):
+    """Сравнение игроков: игроки × метрики, значения и Перцентили.
+
+    Один объект кормит и side-by-side таблицу, и radar-чарт: у них общие оси и общие числа.
+    """
+
+    kind: Literal["comparison"] = "comparison"
+    players: list[ComparisonPlayer]
+    metrics: list[ComparisonMetric]
+
+
 class QuoteView(BaseModel):
     """Цитата из корпуса. Объявлена заранее, наполняется вместе с RAG в спринте 2."""
 
@@ -86,7 +127,12 @@ class QuotesView(BaseModel):
 
 
 class EvidenceView(
-    RootModel[Annotated[TableView | BarsView | QuoteView | QuotesView, Field(discriminator="kind")]]
+    RootModel[
+        Annotated[
+            TableView | BarsView | ComparisonView | QuoteView | QuotesView,
+            Field(discriminator="kind"),
+        ]
+    ]
 ):
     """Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`."""
 
@@ -161,6 +207,50 @@ def project_player_percentiles(result: Mapping[str, Any]) -> EvidenceView | None
             caption=caption,
         )
     )
+
+
+def project_compare_players(result: Mapping[str, Any]) -> EvidenceView | None:
+    """Сравнение — игроки колонками, метрики строками; значения и Перцентили рядом."""
+    try:
+        comparison = PlayerComparisonResponse.model_validate(result)
+    except ValidationError:
+        # См. project_player_stats: рассогласование схемы с самой собой не роняет ответ.
+        log.warning("agent.evidence_projection_failed", tool="compare_players", exc_info=True)
+        return None
+    if not comparison.players:
+        return None
+    # Метрики у всех игроков одни и те же и в одном порядке (общий набор `METRICS`), так что
+    # строку метрики можно собирать по индексу.
+    players = comparison.players
+    labels = [metric.label for metric in players[0].metrics]
+    return EvidenceView(
+        ComparisonView(
+            players=[
+                ComparisonPlayer(
+                    name=player.player.full_name,
+                    season=player.season,
+                    qualified=player.qualified,
+                    sample_size=player.sample_size,
+                )
+                for player in players
+            ],
+            metrics=[
+                ComparisonMetric(
+                    label=label,
+                    cells=[_comparison_cell(player.metrics[index]) for player in players],
+                )
+                for index, label in enumerate(labels)
+            ],
+        )
+    )
+
+
+def _comparison_cell(metric: MetricPercentile) -> ComparisonCell:
+    if metric.value is None:
+        return ComparisonCell(value=BLANK, percentile=None)
+    is_share = metric.metric.endswith("_percentage")
+    value = _percentage(metric.value) if is_share else _number(metric.value)
+    return ComparisonCell(value=value, percentile=metric.percentile)
 
 
 def _season_row(season: SeasonStats) -> list[str]:

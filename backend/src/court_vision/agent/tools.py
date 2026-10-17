@@ -24,6 +24,7 @@ from court_vision.agent.evidence import (
     Evidence,
     EvidenceView,
     ToolFailure,
+    project_compare_players,
     project_player_percentiles,
     project_player_stats,
     project_search_corpus,
@@ -34,7 +35,7 @@ from court_vision.corpus.rerank import maybe_rerank
 from court_vision.corpus.search import search
 from court_vision.errors import DomainError
 from court_vision.players.percentiles import get_player_percentiles
-from court_vision.players.schemas import SEASON_PATTERN
+from court_vision.players.schemas import SEASON_PATTERN, PlayerComparisonResponse
 from court_vision.players.service import get_player_stats
 from court_vision.problems import PROBLEM_TYPE_PREFIX
 
@@ -157,6 +158,70 @@ async def run_get_player_percentiles(
     return percentiles.model_dump(mode="json")
 
 
+class ComparedPlayer(BaseModel):
+    player_name: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Имя игрока латиницей, например `Damian Lillard`. Опечатки допустимы.",
+    )
+    season: str | None = Field(
+        default=None,
+        pattern=SEASON_PATTERN,
+        description="Сезон вида `2012-13`. Без него берётся последний сезон этого игрока.",
+    )
+
+
+class ComparePlayersArgs(BaseModel):
+    players: list[ComparedPlayer] = Field(
+        min_length=2,
+        max_length=4,
+        description="От двух до четырёх игроков; у каждого свой сезон (или последний).",
+    )
+
+
+async def run_compare_players(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = ComparePlayersArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _error_result(
+            "invalid-arguments",
+            "Аргументы не прошли валидацию.",
+            {
+                "errors": [
+                    {"location": list(item["loc"]), "message": item["msg"]}
+                    for item in error.errors()
+                ]
+            },
+        )
+
+    compared = []
+    for entry, requested in enumerate(args.players):
+        try:
+            compared.append(
+                await get_player_percentiles(
+                    session, player_name=requested.player_name, season=requested.season
+                )
+            )
+        except DomainError as error:
+            # Неуверенная Резолюция любого имени — отказ всего сравнения: сравнение с
+            # подставленным наугад игроком хуже, чем уточняющий вопрос. `entry` говорит
+            # модели, чьё имя поправить; остальные записи она повторит как были.
+            return _error_result(_kind(error), error.detail, {**error.extensions(), "entry": entry})
+
+    # Один игрок в одном сезоне дважды — не сравнение, а повтор; на radar он слился бы с собой.
+    seen = [(item.player.player_id, item.season) for item in compared]
+    if len(set(seen)) != len(seen):
+        return _error_result(
+            "duplicate-players",
+            "В сравнении один и тот же игрок в одном и том же сезоне указан дважды.",
+            {},
+        )
+
+    return PlayerComparisonResponse(players=compared).model_dump(mode="json")
+
+
 # Аргументы `search_corpus`. Описания — для модели, см. GetPlayerStatsArgs.
 class SearchCorpusArgs(BaseModel):
     query: str = Field(
@@ -277,7 +342,15 @@ GET_PLAYER_PERCENTILES: Final = Tool(
     project=project_player_percentiles,
 )
 
-TOOLS: Final = (GET_PLAYER_STATS, GET_PLAYER_PERCENTILES, SEARCH_CORPUS)
+COMPARE_PLAYERS: Final = Tool(
+    name="compare_players",
+    description=load_prompt("tools/compare_players"),
+    parameters=_arguments_schema(ComparePlayersArgs),
+    run=run_compare_players,
+    project=project_compare_players,
+)
+
+TOOLS: Final = (GET_PLAYER_STATS, GET_PLAYER_PERCENTILES, COMPARE_PLAYERS, SEARCH_CORPUS)
 TOOLS_BY_NAME: Final = {tool.name: tool for tool in TOOLS}
 
 DEFINITIONS: Final = [tool.definition() for tool in TOOLS]
