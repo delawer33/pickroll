@@ -29,7 +29,7 @@ MIN_MINUTES_PER_GAME: Final = 15
 
 # Вес штрафных в знаменателе True Shooting: 0.44 — стандартная оценка доли владений,
 # закрытых штрафными.
-_FREE_THROW_POSSESSION_WEIGHT: Final = Decimal("0.44")
+FREE_THROW_POSSESSION_WEIGHT: Final = Decimal("0.44")
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,7 +183,7 @@ def _percentiles_statement(player_id: int, season: str) -> Select[Any]:
         share(t.ftm, t.fta).label("free_throw_percentage"),
         (
             num(t.points)
-            / func.nullif(2 * (t.fga + literal(_FREE_THROW_POSSESSION_WEIGHT) * t.fta), 0)
+            / func.nullif(2 * (t.fga + literal(FREE_THROW_POSSESSION_WEIGHT) * t.fta), 0)
         ).label("true_shooting_percentage"),
     ).cte("lines")
     c = lines.c

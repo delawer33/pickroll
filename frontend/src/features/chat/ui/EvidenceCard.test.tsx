@@ -184,4 +184,37 @@ describe('EvidenceCard', () => {
     expect(screen.getByText('season-data-missing')).toBeInTheDocument()
     expect(screen.getByText('Данных за сезон 2005-06 в базе нет.')).toBeInTheDocument()
   })
+
+  it('похожие игроки — сезон, сходство и z-scores обоих по признакам сходства и различия', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          ...CALLED,
+          name: 'find_similar_players',
+          durationMs: 31,
+          result: {
+            kind: 'similar',
+            caption: 'Similar to Luka Doncic · 2025-26 · z-scores vs qualified players',
+            items: [
+              {
+                name: 'James Harden',
+                season: '2017-18',
+                similarity: 0.969,
+                matching: [{ label: 'Ast/36', target: 2.14, similar: 1.96 }],
+                diverging: [{ label: 'Reb/36', target: 1.2, similar: -0.4 }],
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText(/Similar to Luka Doncic/)).toBeInTheDocument()
+    expect(screen.getByText('James Harden')).toBeInTheDocument()
+    expect(screen.getByText('2017-18')).toBeInTheDocument()
+    expect(screen.getByText('0.969')).toBeInTheDocument()
+    expect(screen.getByText('Ast/36 +2.1 / +2.0')).toBeInTheDocument()
+    // Минус — настоящий, не дефис: z-score ниже лиги читается рядом с плюсами.
+    expect(screen.getByText('Reb/36 +1.2 / −0.4')).toBeInTheDocument()
+  })
 })

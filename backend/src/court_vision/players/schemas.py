@@ -124,6 +124,49 @@ class PlayerPercentilesResponse(BaseModel):
     metrics: list[MetricPercentile]
 
 
+class FeatureProfile(BaseModel):
+    """z-score одного признака отпечатка у самого игрока-сезона."""
+
+    metric: str
+    label: str
+    z: float
+
+
+class FeatureZ(BaseModel):
+    """Один признак Статистического отпечатка у пары игрок-сезонов: z-score обоих.
+
+    z — отклонение от среднего Квалифицированных игроков того же сезона в стандартных
+    отклонениях: +2 — заметно выше лиги, 0 — на уровне, −1 — ниже.
+    """
+
+    metric: str
+    label: str
+    target_z: float
+    similar_z: float
+
+
+class SimilarPlayer(BaseModel):
+    """Похожий игрок в своём самом близком сезоне и объяснение сходства."""
+
+    player: PlayerIdentity
+    season: str = Field(pattern=SEASON_PATTERN)
+    # Косинусная близость отпечатков, −1…1; 1 — одинаковый профиль относительно лиги.
+    similarity: float
+    # Признаки, по которым профили ближе всего, и по которым дальше всего.
+    matching: list[FeatureZ]
+    diverging: list[FeatureZ]
+
+
+class SimilarPlayersResponse(BaseModel):
+    """Похожие игроки для игрока-сезона: ближайшие отпечатки, один сезон на игрока."""
+
+    player: PlayerIdentity
+    season: str = Field(pattern=SEASON_PATTERN)
+    # z-scores самого игрока-сезона по всем признакам отпечатка.
+    target_profile: list[FeatureProfile]
+    similar_players: list[SimilarPlayer]
+
+
 class PlayerComparisonResponse(BaseModel):
     """Перцентили нескольких игроков, каждого в своём сезоне, в порядке запроса."""
 

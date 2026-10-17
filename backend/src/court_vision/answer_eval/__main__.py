@@ -9,6 +9,9 @@ JSON + markdown в `backend/evals/reports/` (каталог игнорирует
 `DATABASE_URL` должна быть пустой, срез заливается в неё сам.
 
 Прогон стоит денег: пока итерируешь над одной проблемой — `--category` или `--id`.
+
+`--similar-pairs` вместо этого проверяет золотые пары Похожих игроков
+(`evals/similar_pairs.yaml`): детерминированно, без LLM и без расходов.
 """
 
 from __future__ import annotations
@@ -38,6 +41,12 @@ from court_vision.answer_eval.runner import (
     db_now,
     evaluate_answers,
 )
+from court_vision.answer_eval.similar_pairs import (
+    DEFAULT_PAIRS_PATH,
+    check_pairs,
+    format_results,
+    load_pairs,
+)
 from court_vision.config import Settings, get_settings
 from court_vision.db import create_engine, create_session_factory
 from court_vision.eval_slice.config import DEFAULT_SLICE_DIR
@@ -49,6 +58,19 @@ from court_vision.observability import configure_llm_observability
 log = structlog.get_logger(__name__)
 
 DEFAULT_REPORT_DIR = EVALS_DIR / "reports"
+
+
+async def run_similar_pairs(settings: Settings, *, pairs_path: Path) -> int:
+    """Золотые пары Похожих игроков на базе из `DATABASE_URL`; 1 — хоть одна пара провалена."""
+    golden = load_pairs(pairs_path)
+    engine = create_engine(settings.database_url)
+    try:
+        results = await check_pairs(create_session_factory(engine), golden)
+    finally:
+        await engine.dispose()
+    # print, а не лог: таблица и есть результат команды.
+    print(format_results(results))
+    return 0 if all(result.passed for result in results) else 1
 
 
 async def run(
@@ -152,6 +174,12 @@ def main() -> None:
     )
     parser.add_argument("--report-dir", type=Path, default=DEFAULT_REPORT_DIR)
     parser.add_argument(
+        "--similar-pairs",
+        action="store_true",
+        help="только золотые пары Похожих игроков: без LLM, код выхода 1 при провале пары",
+    )
+    parser.add_argument("--pairs", type=Path, default=DEFAULT_PAIRS_PATH, help="файл золотых пар")
+    parser.add_argument(
         "--slice",
         action="store_true",
         help="прогон на Eval-срезе: перед вопросами миграции и заливка среза в ПУСТУЮ базу "
@@ -163,6 +191,8 @@ def main() -> None:
     args = parser.parse_args()
 
     configure_logging()
+    if args.similar_pairs:
+        sys.exit(asyncio.run(run_similar_pairs(get_settings(), pairs_path=args.pairs)))
     code = asyncio.run(
         run(
             get_settings(),

@@ -22,6 +22,23 @@ export interface Quote {
   text: string
 }
 
+/** Признак Статистического отпечатка у пары игрок-сезонов: z-score искомого игрока и похожего. */
+export interface SimilarFeature {
+  label: string
+  target: number
+  similar: number
+}
+
+/** Похожий игрок в своём самом близком сезоне: сходство и в чём оно, а в чём нет. */
+export interface SimilarItem {
+  name: string
+  season: string
+  /** Косинус отпечатков, −1…1. */
+  similarity: number
+  matching: SimilarFeature[]
+  diverging: SimilarFeature[]
+}
+
 /** Игрок в сезоне — колонка сравнения. `qualified: false` — Перцентили ненадёжны. */
 export interface ComparisonPlayer {
   name: string
@@ -56,6 +73,8 @@ export type ToolResult =
   | { kind: 'quote'; text: string }
   /** Выдача поиска по корпусу: цитаты с номерами цитирования и локаторами. */
   | { kind: 'quotes'; quotes: Quote[] }
+  /** Похожие игроки: список игрок-сезонов с объяснением сходства признаками. */
+  | { kind: 'similar'; caption: string; items: SimilarItem[] }
   /** Динамика по сезонам: линия на сезон-ось, у каждой серии своё имя и слот палитры. */
   | { kind: 'series'; metric: string; unit: string; series: Series[] }
 

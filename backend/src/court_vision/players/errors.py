@@ -70,6 +70,40 @@ class SeasonDataMissing(DomainError):
         }
 
 
+class FingerprintMissing(DomainError):
+    """У игрока-сезона нет Статистического отпечатка — искать похожих не от чего.
+
+    Отпечаток есть только у Квалифицированных сезонов, где считались все его признаки и
+    минуты. Отдельная ошибка с причиной и сезонами, где отпечаток есть: честная граница
+    инструмента, а не пустой список «похожих», который читался бы как «таких нет».
+    """
+
+    status: ClassVar[int] = 404
+    problem_type: ClassVar[str] = f"{PROBLEM_TYPE_PREFIX}fingerprint-missing"
+    title: ClassVar[str] = "No statistical fingerprint"
+
+    def __init__(
+        self, player_id: int, full_name: str, season: str | None, available: tuple[str, ...]
+    ) -> None:
+        scope = f"в сезоне {season}" if season else "ни в одном сезоне"
+        super().__init__(
+            f"У игрока {full_name} нет Статистического отпечатка {scope}: отпечаток строится "
+            "только для сезонов, где игрок Квалифицированный и считались все метрики "
+            "(минуты, перехваты, блоки, потери, трёхочковые попытки)."
+        )
+        self.player_id = player_id
+        self.full_name = full_name
+        self.season = season
+        self.available = available
+
+    def extensions(self) -> dict[str, Any]:
+        return {
+            "player": {"player_id": self.player_id, "full_name": self.full_name},
+            "season": self.season,
+            "available_seasons": list(self.available),
+        }
+
+
 def _candidate(candidate: PlayerCandidate) -> dict[str, Any]:
     return {
         "player_id": candidate.player_id,

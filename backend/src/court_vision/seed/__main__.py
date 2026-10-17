@@ -16,6 +16,7 @@ import structlog
 
 from court_vision.config import get_settings
 from court_vision.logging import configure_logging
+from court_vision.players.rebuild_fingerprints import run as rebuild_fingerprints
 from court_vision.seed.loader import seed_database
 from court_vision.seed.source import DatasetSource, download_source, local_source
 
@@ -35,6 +36,9 @@ async def run(source: DatasetSource, database_url: str) -> None:
         await seed_database(connection, source)
     finally:
         await connection.close()
+    # Отпечатки производны от Box Score: после любой загрузки строк они устаревают.
+    fingerprints = await rebuild_fingerprints(database_url)
+    log.info("seed.fingerprints_rebuilt", fingerprints=fingerprints)
 
 
 def main() -> None:

@@ -14,10 +14,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from sqlalchemy import func, select, text
+from sqlalchemy import exists, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from court_vision.players.models import Player
+from court_vision.players.models import BoxScore, Player
 
 # Ниже этого сходства кандидат не заслуживает даже упоминания среди ближайших: на другом
 # алфавите pg_trgm даёт ровный ноль, и подсовывать в ответ случайные имена — дезинформация.
@@ -90,6 +90,14 @@ async def resolve_player_name(session: AsyncSession, name: str) -> PlayerResolut
         return UnknownName(query=query, nearest=tuple(ranked))
 
     tied = [c for c in ranked if c.similarity >= best.similarity * _TIE_RATIO]
+    # Тёзки с одинаковым написанием, из которых играл один: остальные — строки справочника
+    # без единого матча (в датасете их тысячи), и кандидатов, по которым ничего нельзя
+    # ответить, модель от оригинала не отличит — имена у них совпадают до символа.
+    if len(tied) > 1 and len({c.full_name for c in tied}) == 1:
+        with_games = await _with_box_scores(session, [c.player_id for c in tied])
+        if len(with_games) == 1:
+            best = next(c for c in tied if c.player_id == with_games[0])
+            tied = [best]
     if len(tied) > 1:
         return AmbiguousName(query=query, candidates=tuple(tied))
 
@@ -97,6 +105,14 @@ async def resolve_player_name(session: AsyncSession, name: str) -> PlayerResolut
     if player is None:  # pragma: no cover — игрок исчезнуть внутри одной транзакции не может
         return UnknownName(query=query, nearest=())
     return ResolvedPlayer(player=player, similarity=best.similarity)
+
+
+async def _with_box_scores(session: AsyncSession, player_ids: list[int]) -> list[int]:
+    """Из перечисленных игроков — те, у кого есть хотя бы одна строка Box Score."""
+    statement = select(Player.id).where(
+        Player.id.in_(player_ids), exists().where(BoxScore.player_id == Player.id)
+    )
+    return list(await session.scalars(statement))
 
 
 async def _search(session: AsyncSession, query: str) -> list[PlayerCandidate]:

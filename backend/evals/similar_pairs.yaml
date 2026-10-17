@@ -1,0 +1,96 @@
+# Золотые пары Похожих игроков: детерминированная проверка Статистических отпечатков без LLM.
+# Прогон — `uv run python -m court_vision.answer_eval --similar-pairs` на полной базе (нужны
+# пересобранные отпечатки: `python -m court_vision.players.rebuild_fingerprints`).
+#
+# Близость — косинус отпечатков двух игрок-сезонов (1 — одинаковый профиль относительно лиги
+# своего сезона). Пороги выставлены по замерам на полной базе с запасом: похожие пары сидят
+# в 0.78–0.98, непохожие — в −0.30…0.17. Пару, которая «не проходит», не двигают к порогу, а
+# разбираются, что сломалось в отпечатке.
+#
+# Сезоны подобраны так, чтобы у обоих игроков отпечаток существовал (с 1979-80, Квалифицированные).
+
+similar_min: 0.7
+dissimilar_max: 0.25
+
+pairs:
+  # --- похожи ---
+  - player_a: Rudy Gobert
+    season_a: 2020-21
+    player_b: Dikembe Mutombo
+    season_b: 1996-97
+    expect: similar
+    why: Рим-протекторы-центры, много подборов и блоков, почти без передач и трёхочковых; пара через 24 года.
+  - player_a: Nikola Jokic
+    season_a: 2022-23
+    player_b: Domantas Sabonis
+    season_b: 2020-21
+    expect: similar
+    why: Центры-распасовщики, у которых подборы и передачи выше лиги одновременно.
+  - player_a: Luka Doncic
+    season_a: 2023-24
+    player_b: James Harden
+    season_b: 2017-18
+    expect: similar
+    why: Первичные создатели с высокими очками, передачами и потерями и частыми штрафными.
+  - player_a: LeBron James
+    season_a: 2017-18
+    player_b: Magic Johnson
+    season_b: 1986-87
+    expect: similar
+    why: Крупные плеймейкеры-форварды, очки и передачи вместе при сильной эффективности; разные эпохи.
+  - player_a: Stephen Curry
+    season_a: 2015-16
+    player_b: Ray Allen
+    season_b: 2005-06
+    expect: similar
+    why: Стрелки с большой долей трёхочковых и высоким TS%.
+  - player_a: Tim Duncan
+    season_a: 2002-03
+    player_b: David Robinson
+    season_b: 1994-95
+    expect: similar
+    why: Два классических двусторонних большого — подборы, блоки, эффективность.
+  - player_a: Magic Johnson
+    season_a: 1986-87
+    player_b: Chris Paul
+    season_b: 2008-09
+    expect: similar
+    why: Плеймейкеры с передачами и перехватами выше лиги.
+  - player_a: Stephen Curry
+    season_a: 2015-16
+    player_b: Damian Lillard
+    season_b: 2019-20
+    expect: similar
+    why: Скоринговые разыгрывающие с высокой долей трёхочковых.
+
+  # --- непохожи ---
+  - player_a: Rudy Gobert
+    season_a: 2020-21
+    player_b: Stephen Curry
+    season_b: 2015-16
+    expect: dissimilar
+    why: Рим-протектор без броска против стрелка-разыгрывающего — противоположные профили.
+  - player_a: Luka Doncic
+    season_a: 2023-24
+    player_b: Dikembe Mutombo
+    season_b: 1996-97
+    expect: dissimilar
+    why: Первичный создатель против чистого защитника кольца.
+  - player_a: Shaquille O'Neal
+    season_a: 1999-00
+    player_b: Chris Paul
+    season_b: 2008-09
+    expect: dissimilar
+    why: Доминирующий центр у кольца против плеймейкера, подборы, блоки, передачи и перехваты — в противофазе.
+  - player_a: Dennis Rodman
+    season_a: 1991-92
+    player_b: Stephen Curry
+    season_b: 2015-16
+    expect: dissimilar
+    why: Подбирающий без броска против лучшего стрелка лиги.
+  - player_a: Steve Nash
+    season_a: 2005-06
+    player_b: Shaquille O'Neal
+    season_b: 1999-00
+    expect: dissimilar
+    why: Плеймейкер и доминирующий центр.

@@ -79,6 +79,14 @@ Box Score) — идемпотентный one-off модуль. Повторны
 docker compose exec api python -m court_vision.seed
 ```
 
+После загрузки seed сам пересобирает Статистические отпечатки игрок-сезонов (таблица
+`player_fingerprints`, по ней работает `find_similar_players`). Пересобрать отдельно —
+идемпотентная замена таблицы в одной транзакции, около 10 секунд на полной базе:
+
+```bash
+docker compose exec api python -m court_vision.players.rebuild_fingerprints
+```
+
 Датасет — [eoinamoore/historical-nba-data-and-player-box-scores](https://www.kaggle.com/datasets/eoinamoore/historical-nba-data-and-player-box-scores),
 версия запинена в коде (`court_vision/seed/source.py`): датасет обновляется еженощно, а seed
 обязан быть воспроизводим. Скачивание идёт публичным эндпоинтом Kaggle — учётные данные не
@@ -132,7 +140,13 @@ cd backend
 uv run python -m court_vision.answer_eval                  # весь набор
 uv run python -m court_vision.answer_eval --category stats # только категория
 uv run python -m court_vision.answer_eval --id stats-curry-2015-16
+uv run python -m court_vision.answer_eval --similar-pairs  # золотые пары, без LLM
 ```
+
+`--similar-pairs` проверяет Золотые пары Похожих игроков (`backend/evals/similar_pairs.yaml`):
+близость отпечатков заведомо похожих игрок-сезонов выше порога, заведомо непохожих — ниже.
+Детерминированно и бесплатно (модель не вызывается), код выхода 1 при проваленной паре; нужны
+полная база и пересобранные отпечатки.
 
 Команда печатает сводку и путь к отчёту (JSON + markdown в `backend/evals/reports/`, каталог в
 git не попадает). Код выхода 1 — результат ниже порогов из `backend/evals/answers_thresholds.yaml`

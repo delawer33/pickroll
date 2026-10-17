@@ -28,6 +28,7 @@ from court_vision.agent.evidence import (
     project_player_percentiles,
     project_player_stats,
     project_search_corpus,
+    project_similar_players,
 )
 from court_vision.agent.prompts import load_prompt
 from court_vision.agent.transport import embed
@@ -37,6 +38,7 @@ from court_vision.errors import DomainError
 from court_vision.players.percentiles import get_player_percentiles
 from court_vision.players.schemas import SEASON_PATTERN, PlayerComparisonResponse
 from court_vision.players.service import get_player_stats
+from court_vision.players.similar import DEFAULT_LIMIT, MAX_LIMIT, find_similar_players
 from court_vision.problems import PROBLEM_TYPE_PREFIX
 
 if TYPE_CHECKING:
@@ -222,6 +224,55 @@ async def run_compare_players(
     return PlayerComparisonResponse(players=compared).model_dump(mode="json")
 
 
+class FindSimilarPlayersArgs(BaseModel):
+    player_name: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Имя игрока латиницей, например `Luka Doncic`. Опечатки допустимы.",
+    )
+    season: str | None = Field(
+        default=None,
+        pattern=SEASON_PATTERN,
+        description="Сезон вида `2015-16`, от которого искать похожих. Без него берётся "
+        "последний квалифицированный сезон игрока.",
+    )
+    limit: int = Field(
+        default=DEFAULT_LIMIT,
+        ge=1,
+        le=MAX_LIMIT,
+        description=f"Сколько похожих игроков вернуть, не больше {MAX_LIMIT}.",
+    )
+
+
+async def run_find_similar_players(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = FindSimilarPlayersArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _error_result(
+            "invalid-arguments",
+            "Аргументы не прошли валидацию.",
+            {
+                "errors": [
+                    {"location": list(item["loc"]), "message": item["msg"]}
+                    for item in error.errors()
+                ]
+            },
+        )
+
+    try:
+        similar = await find_similar_players(
+            session, player_name=args.player_name, season=args.season, limit=args.limit
+        )
+    except DomainError as error:
+        # Сезон без отпечатка (`fingerprint-missing`) — обычный ответ границы Инструмента:
+        # модель получает причину и сезоны, где отпечаток есть, и честно говорит об этом.
+        return _error_result(_kind(error), error.detail, error.extensions())
+
+    return similar.model_dump(mode="json")
+
+
 # Аргументы `search_corpus`. Описания — для модели, см. GetPlayerStatsArgs.
 class SearchCorpusArgs(BaseModel):
     query: str = Field(
@@ -350,7 +401,21 @@ COMPARE_PLAYERS: Final = Tool(
     project=project_compare_players,
 )
 
-TOOLS: Final = (GET_PLAYER_STATS, GET_PLAYER_PERCENTILES, COMPARE_PLAYERS, SEARCH_CORPUS)
+FIND_SIMILAR_PLAYERS: Final = Tool(
+    name="find_similar_players",
+    description=load_prompt("tools/find_similar_players"),
+    parameters=_arguments_schema(FindSimilarPlayersArgs),
+    run=run_find_similar_players,
+    project=project_similar_players,
+)
+
+TOOLS: Final = (
+    GET_PLAYER_STATS,
+    GET_PLAYER_PERCENTILES,
+    COMPARE_PLAYERS,
+    FIND_SIMILAR_PLAYERS,
+    SEARCH_CORPUS,
+)
 TOOLS_BY_NAME: Final = {tool.name: tool for tool in TOOLS}
 
 DEFINITIONS: Final = [tool.definition() for tool in TOOLS]

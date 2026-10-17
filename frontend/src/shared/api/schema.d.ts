@@ -292,7 +292,7 @@ export interface components {
          * EvidenceView
          * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
          */
-        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["ComparisonView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"];
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["ComparisonView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"] | components["schemas"]["SimilarView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -552,6 +552,49 @@ export interface components {
             three_pointers_made: number | null;
             /** Turnovers */
             turnovers: number | null;
+        };
+        /**
+         * SimilarFeature
+         * @description Признак отпечатка у пары игрок-сезонов: z-score искомого игрока и похожего.
+         */
+        SimilarFeature: {
+            /** Label */
+            label: string;
+            /** Similar */
+            similar: number;
+            /** Target */
+            target: number;
+        };
+        /**
+         * SimilarItem
+         * @description Похожий игрок: самый близкий сезон, сходство и в чём оно, а в чём нет.
+         */
+        SimilarItem: {
+            /** Diverging */
+            diverging: components["schemas"]["SimilarFeature"][];
+            /** Matching */
+            matching: components["schemas"]["SimilarFeature"][];
+            /** Name */
+            name: string;
+            /** Season */
+            season: string;
+            /** Similarity */
+            similarity: number;
+        };
+        /**
+         * SimilarView
+         * @description Выдача `find_similar_players`: список игрок-сезонов с объяснением сходства.
+         */
+        SimilarView: {
+            /** Caption */
+            caption: string;
+            /** Items */
+            items: components["schemas"]["SimilarItem"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "similar";
         };
         /**
          * TableView

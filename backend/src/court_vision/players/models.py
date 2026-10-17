@@ -1,7 +1,9 @@
 from datetime import date
 from typing import Final
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from court_vision.db import Base
@@ -137,3 +139,36 @@ class BoxScore(Base):
 
     plus_minus: Mapped[int | None] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text)
+
+
+# Число признаков Статистического отпечатка зашито в тип колонки: pgvector требует
+# фиксированную размерность для HNSW. Список самих признаков — `fingerprints.FEATURES`, и
+# модуль сверяет его длину с этой константой при импорте.
+FINGERPRINT_DIMENSIONS = 9
+
+
+class PlayerFingerprint(Base):
+    """Статистический отпечаток игрока в сезоне (см. CONTEXT.md).
+
+    Таблица производная: целиком пересобирается командой `rebuild_fingerprints` из строк
+    Box Score, руками и приложением не пишется. Строки есть только у Квалифицированных
+    сезонов, где считались все признаки и минуты.
+    """
+
+    __tablename__ = "player_fingerprints"
+    __table_args__ = (
+        # Косинусная близость по HNSW — как в индексе чанков корпуса.
+        Index(
+            "ix_player_fingerprints_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
+
+    player_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("players.id"), primary_key=True)
+    season: Mapped[str] = mapped_column(String(7), primary_key=True)
+    # Вектор, по которому идёт поиск, и те же z-scores по ключам признаков для объяснения:
+    # JSONB читается человеком и моделью, вектор — только индексом.
+    embedding: Mapped[list[float]] = mapped_column(Vector(FINGERPRINT_DIMENSIONS))
+    z_scores: Mapped[dict[str, float]] = mapped_column(JSONB)

@@ -165,6 +165,7 @@ async def test_инструменты_объявлены_модели(
         "get_player_stats",
         "get_player_percentiles",
         "compare_players",
+        "find_similar_players",
         "search_corpus",
     ]
     parameters = tools[0]["function"]["parameters"]
@@ -440,6 +441,7 @@ async def test_несуществующий_инструмент_возвращ�
     assert failure["kind"] == "unknown-tool"
     assert failure["available_tools"] == [
         "compare_players",
+        "find_similar_players",
         "get_player_percentiles",
         "get_player_stats",
         "search_corpus",

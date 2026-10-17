@@ -25,6 +25,7 @@ from court_vision.players.schemas import (
     PlayerPercentilesResponse,
     PlayerStatsResponse,
     SeasonStats,
+    SimilarPlayersResponse,
 )
 
 log = structlog.get_logger(__name__)
@@ -126,10 +127,38 @@ class QuotesView(BaseModel):
     quotes: list[Quote]
 
 
+class SimilarFeature(BaseModel):
+    """Признак отпечатка у пары игрок-сезонов: z-score искомого игрока и похожего."""
+
+    label: str
+    target: float
+    similar: float
+
+
+class SimilarItem(BaseModel):
+    """Похожий игрок: самый близкий сезон, сходство и в чём оно, а в чём нет."""
+
+    name: str
+    season: str
+    # Косинусная близость отпечатков, −1…1.
+    similarity: float
+    matching: list[SimilarFeature]
+    diverging: list[SimilarFeature]
+
+
+class SimilarView(BaseModel):
+    """Выдача `find_similar_players`: список игрок-сезонов с объяснением сходства."""
+
+    kind: Literal["similar"] = "similar"
+    # Чьи похожие и в каких единицах z: без подписи z-score в карточке — голые числа.
+    caption: str
+    items: list[SimilarItem]
+
+
 class EvidenceView(
     RootModel[
         Annotated[
-            TableView | BarsView | ComparisonView | QuoteView | QuotesView,
+            TableView | BarsView | ComparisonView | QuoteView | QuotesView | SimilarView,
             Field(discriminator="kind"),
         ]
     ]
@@ -205,6 +234,42 @@ def project_player_percentiles(result: Mapping[str, Any]) -> EvidenceView | None
                 for metric in percentiles.metrics
             ],
             caption=caption,
+        )
+    )
+
+
+def project_similar_players(result: Mapping[str, Any]) -> EvidenceView | None:
+    """Похожие игроки — список игрок-сезонов; у каждого сходство и признаки сходства/различия."""
+    try:
+        similar = SimilarPlayersResponse.model_validate(result)
+    except ValidationError:
+        # См. project_player_stats: рассогласование схемы с самой собой не роняет ответ.
+        log.warning("agent.evidence_projection_failed", tool="find_similar_players", exc_info=True)
+        return None
+    if not similar.similar_players:
+        return None
+    return EvidenceView(
+        SimilarView(
+            caption=(
+                f"Similar to {similar.player.full_name} · {similar.season} · "
+                "z-scores vs qualified players of each season"
+            ),
+            items=[
+                SimilarItem(
+                    name=item.player.full_name,
+                    season=item.season,
+                    similarity=item.similarity,
+                    matching=[
+                        SimilarFeature(label=f.label, target=f.target_z, similar=f.similar_z)
+                        for f in item.matching
+                    ],
+                    diverging=[
+                        SimilarFeature(label=f.label, target=f.target_z, similar=f.similar_z)
+                        for f in item.diverging
+                    ],
+                )
+                for item in similar.similar_players
+            ],
         )
     )
 

@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 import type { ToolCall, ToolResult } from '@/features/chat/model/types'
 import { ComparisonResult } from '@/features/chat/ui/ComparisonResult'
 import { SeriesResult } from '@/features/chat/ui/SeriesResult'
+import { SimilarResult } from '@/features/chat/ui/SimilarResult'
 import { Collapsible } from '@/shared/ui/Collapsible'
 import { DataTable } from '@/shared/ui/DataTable'
 import { cn } from '@/shared/ui/cn'
@@ -115,6 +116,10 @@ function ToolResultView({ result }: { result: ToolResult }) {
         ))}
       </ul>
     )
+  }
+
+  if (result.kind === 'similar') {
+    return <SimilarResult caption={result.caption} items={result.items} />
   }
 
   if (result.kind === 'table') {
