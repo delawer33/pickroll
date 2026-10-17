@@ -24,6 +24,7 @@ from court_vision.agent.evidence import (
     Evidence,
     EvidenceView,
     ToolFailure,
+    project_player_percentiles,
     project_player_stats,
     project_search_corpus,
 )
@@ -32,6 +33,7 @@ from court_vision.agent.transport import embed
 from court_vision.corpus.rerank import maybe_rerank
 from court_vision.corpus.search import search
 from court_vision.errors import DomainError
+from court_vision.players.percentiles import get_player_percentiles
 from court_vision.players.schemas import SEASON_PATTERN
 from court_vision.players.service import get_player_stats
 from court_vision.problems import PROBLEM_TYPE_PREFIX
@@ -113,6 +115,46 @@ async def run_get_player_stats(
         return _error_result(_kind(error), error.detail, error.extensions())
 
     return stats.model_dump(mode="json")
+
+
+class GetPlayerPercentilesArgs(BaseModel):
+    player_name: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Имя игрока латиницей, например `Stephen Curry`. Опечатки допустимы.",
+    )
+    season: str | None = Field(
+        default=None,
+        pattern=SEASON_PATTERN,
+        description="Сезон вида `2015-16`. Без него берётся последний сезон игрока.",
+    )
+
+
+async def run_get_player_percentiles(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = GetPlayerPercentilesArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _error_result(
+            "invalid-arguments",
+            "Аргументы не прошли валидацию.",
+            {
+                "errors": [
+                    {"location": list(item["loc"]), "message": item["msg"]}
+                    for item in error.errors()
+                ]
+            },
+        )
+
+    try:
+        percentiles = await get_player_percentiles(
+            session, player_name=args.player_name, season=args.season
+        )
+    except DomainError as error:
+        return _error_result(_kind(error), error.detail, error.extensions())
+
+    return percentiles.model_dump(mode="json")
 
 
 # Аргументы `search_corpus`. Описания — для модели, см. GetPlayerStatsArgs.
@@ -227,7 +269,15 @@ SEARCH_CORPUS: Final = Tool(
     project=project_search_corpus,
 )
 
-TOOLS: Final = (GET_PLAYER_STATS, SEARCH_CORPUS)
+GET_PLAYER_PERCENTILES: Final = Tool(
+    name="get_player_percentiles",
+    description=load_prompt("tools/get_player_percentiles"),
+    parameters=_arguments_schema(GetPlayerPercentilesArgs),
+    run=run_get_player_percentiles,
+    project=project_player_percentiles,
+)
+
+TOOLS: Final = (GET_PLAYER_STATS, GET_PLAYER_PERCENTILES, SEARCH_CORPUS)
 TOOLS_BY_NAME: Final = {tool.name: tool for tool in TOOLS}
 
 DEFINITIONS: Final = [tool.definition() for tool in TOOLS]

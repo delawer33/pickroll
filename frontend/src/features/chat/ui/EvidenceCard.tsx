@@ -126,6 +126,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
 
   return (
     <div className="grid gap-2">
+      {result.caption != null && <p className="t-micro text-ink-muted">{result.caption}</p>}
       {result.bars.map((bar) => (
         <div
           key={bar.label}
@@ -139,16 +140,20 @@ function ToolResultView({ result }: { result: ToolResult }) {
               aria-hidden="true"
               className="absolute top-0 bottom-0 -mx-px w-px bg-line left-1/2"
             />
-            <span
-              aria-hidden="true"
-              className={cn(
-                'absolute top-0 bottom-0',
-                bar.percentile >= 50 ? 'left-1/2 bg-div-pos' : 'right-1/2 bg-div-neg',
-              )}
-              style={{ width: `${String(Math.abs(bar.percentile - 50))}%` }}
-            />
+            {bar.percentile !== null && (
+              <span
+                aria-hidden="true"
+                className={cn(
+                  'absolute top-0 bottom-0',
+                  bar.percentile >= 50 ? 'left-1/2 bg-div-pos' : 'right-1/2 bg-div-neg',
+                )}
+                style={{ width: `${String(Math.abs(bar.percentile - 50))}%` }}
+              />
+            )}
           </span>
-          <span className="num t-body-sm text-right text-ink-secondary">{bar.percentile}</span>
+          <span className="num t-body-sm text-right text-ink-secondary">
+            {bar.percentile ?? '—'}
+          </span>
         </div>
       ))}
     </div>

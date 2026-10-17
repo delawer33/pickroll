@@ -93,6 +93,33 @@ describe('EvidenceCard', () => {
     ).toBeInTheDocument()
   })
 
+  it('полосы перцентилей: подпись выборки, прочерк для не считавшейся метрики', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          id: 'call_percentiles',
+          name: 'get_player_percentiles',
+          source: 'Stephen Curry · 2015-16',
+          durationMs: 40,
+          result: {
+            kind: 'bars',
+            caption: '2015-16 · vs 190 qualified players',
+            bars: [
+              { label: 'Pts', percentile: 99 },
+              { label: '3P%', percentile: null },
+            ],
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('2015-16 · vs 190 qualified players')).toBeInTheDocument()
+    expect(screen.getByText('99')).toBeInTheDocument()
+    // Прочерк, а не «0»: ноль читался бы как худший Перцентиль.
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
+  })
+
   it('отказ Инструмента подписан причиной и не выглядит удачным вызовом', () => {
     // Карточка вызова без данных обязана отличаться от карточки с данными: иначе рейка
     // говорит «Агент сходил за данными» там, где Агент вернулся ни с чем.

@@ -90,3 +90,35 @@ class PlayerStatsResponse(BaseModel):
     # только внутри одного типа.
     game_type: str
     seasons: list[SeasonStats]
+
+
+class MetricPercentile(BaseModel):
+    """Одна метрика игрока в сезоне и её Перцентиль среди Квалифицированных игроков.
+
+    `value == None` — лига в тот сезон метрику не считала (или считать нечего: ни одного
+    броска), и тогда Перцентиля нет тоже: `percentile == None`, а не 0.
+    """
+
+    metric: str
+    label: str
+    # Показатель за игру; проценты — доли 0–1 от тоталов, как в `SeasonAverages`.
+    value: float | None
+    # 0–100, «больше — лучше» для всех метрик, включая инвертированные.
+    percentile: int | None = Field(default=None, ge=0, le=100)
+    # Перцентиль инвертирован: меньше значение — выше Перцентиль (потери).
+    lower_is_better: bool = False
+
+
+class PlayerPercentilesResponse(BaseModel):
+    """Перцентили игрока в одном сезоне регулярного чемпионата."""
+
+    player: PlayerIdentity
+    season: str = Field(pattern=SEASON_PATTERN)
+    game_type: str
+    games_played: int
+    # False — игрок не Квалифицированный: Перцентили посчитаны относительно выборки
+    # Квалифицированных игроков, но сам он в неё не входит и доверять им вслепую нельзя.
+    qualified: bool
+    # Сколько Квалифицированных игроков в выборке сезона.
+    sample_size: int
+    metrics: list[MetricPercentile]

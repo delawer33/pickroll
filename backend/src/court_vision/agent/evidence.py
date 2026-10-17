@@ -19,7 +19,11 @@ from typing import Annotated, Any, Literal
 import structlog
 from pydantic import BaseModel, Field, RootModel, ValidationError
 
-from court_vision.players.schemas import PlayerStatsResponse, SeasonStats
+from court_vision.players.schemas import (
+    PlayerPercentilesResponse,
+    PlayerStatsResponse,
+    SeasonStats,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -40,15 +44,18 @@ class Bar(BaseModel):
     """Метрика игрока относительно сравнимой выборки."""
 
     label: str
-    percentile: int = Field(ge=0, le=100)
+    # None — метрика в том сезоне не считалась: карточка рисует прочерк, а не нулевую полосу.
+    percentile: int | None = Field(ge=0, le=100)
 
 
 class BarsView(BaseModel):
-    """Полосы перцентилей. Объявлена заранее: форму обещает §7.2, а наполнит её
-    `get_player_percentiles` в спринте 3 — контракт потока от этого не поменяется."""
+    """Полосы перцентилей одного игрока в сезоне."""
 
     kind: Literal["bars"] = "bars"
     bars: list[Bar]
+    # Чем были посчитаны полосы: сезон, размер выборки и, если игрок не Квалифицированный,
+    # предупреждение. Без подписи полосы выглядят одинаково достоверными для любого игрока.
+    caption: str | None = None
 
 
 class QuoteView(BaseModel):
@@ -128,6 +135,30 @@ def project_player_stats(result: Mapping[str, Any]) -> EvidenceView | None:
         TableView(
             columns=["Season", "GP", "Pts", "Reb", "Ast", "FG%"],
             rows=[_season_row(season) for season in stats.seasons],
+        )
+    )
+
+
+def project_player_percentiles(result: Mapping[str, Any]) -> EvidenceView | None:
+    """Перцентили игрока — полосы по метрикам; не считавшаяся метрика — полоса без значения."""
+    try:
+        percentiles = PlayerPercentilesResponse.model_validate(result)
+    except ValidationError:
+        # См. project_player_stats: рассогласование схемы с самой собой не роняет ответ.
+        log.warning(
+            "agent.evidence_projection_failed", tool="get_player_percentiles", exc_info=True
+        )
+        return None
+    caption = f"{percentiles.season} · vs {percentiles.sample_size} qualified players"
+    if not percentiles.qualified:
+        caption += " · not qualified: too few games or minutes"
+    return EvidenceView(
+        BarsView(
+            bars=[
+                Bar(label=metric.label, percentile=metric.percentile)
+                for metric in percentiles.metrics
+            ],
+            caption=caption,
         )
     )
 

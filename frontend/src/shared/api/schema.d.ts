@@ -128,16 +128,17 @@ export interface components {
             /** Label */
             label: string;
             /** Percentile */
-            percentile: number;
+            percentile: number | null;
         };
         /**
          * BarsView
-         * @description Полосы перцентилей. Объявлена заранее: форму обещает §7.2, а наполнит её
-         *     `get_player_percentiles` в спринте 3 — контракт потока от этого не поменяется.
+         * @description Полосы перцентилей одного игрока в сезоне.
          */
         BarsView: {
             /** Bars */
             bars: components["schemas"]["Bar"][];
+            /** Caption */
+            caption?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}

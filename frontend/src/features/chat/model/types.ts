@@ -25,7 +25,13 @@ export interface Quote {
 /** Результат Инструмента — то, что показывается в карточке Evidence. */
 export type ToolResult =
   | { kind: 'table'; columns: string[]; rows: string[][] }
-  | { kind: 'bars'; bars: Array<{ label: string; percentile: number }> }
+  /** `percentile: null` — метрика в сезоне не считалась: прочерк, а не нулевая полоса. */
+  | {
+      kind: 'bars'
+      bars: Array<{ label: string; percentile: number | null }>
+      /** Сезон, выборка и предупреждение о неквалифицированном игроке. */
+      caption?: string | null
+    }
   | { kind: 'quote'; text: string }
   /** Выдача поиска по корпусу: цитаты с номерами цитирования и локаторами. */
   | { kind: 'quotes'; quotes: Quote[] }

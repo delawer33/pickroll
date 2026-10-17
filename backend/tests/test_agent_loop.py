@@ -161,7 +161,11 @@ async def test_инструменты_объявлены_модели(
     await answer(session_factory, history=QUESTION, settings=agent_settings)
 
     tools = fake.calls[0]["tools"]
-    assert [tool["function"]["name"] for tool in tools] == ["get_player_stats", "search_corpus"]
+    assert [tool["function"]["name"] for tool in tools] == [
+        "get_player_stats",
+        "get_player_percentiles",
+        "search_corpus",
+    ]
     parameters = tools[0]["function"]["parameters"]
     assert parameters["required"] == ["player_name"]
     # Требование латиницы — часть контракта Инструмента: без него модель шлёт кириллицу,
@@ -433,7 +437,11 @@ async def test_несуществующий_инструмент_возвращ�
 
     failure = result.tool_invocations[0].result["error"]
     assert failure["kind"] == "unknown-tool"
-    assert failure["available_tools"] == ["get_player_stats", "search_corpus"]
+    assert failure["available_tools"] == [
+        "get_player_percentiles",
+        "get_player_stats",
+        "search_corpus",
+    ]
 
 
 async def test_упавший_инструмент_не_обрывает_ход_агента(

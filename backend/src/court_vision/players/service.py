@@ -10,7 +10,7 @@ materialized view в системе нет (см. docs/sprints/sprint-1.md). GRO
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import Row, Select, func, or_, select
+from sqlalchemy import ColumnElement, Row, Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from court_vision.players.errors import AmbiguousPlayerName, PlayerNotFound, SeasonDataMissing
@@ -40,6 +40,19 @@ async def get_player_stats(
     Неуверенная резолюция и отсутствие данных — доменные ошибки, а не пустой ответ:
     вызывающая сторона должна различать «ноль очков» и «мы не знаем».
     """
+    player = await resolve_player(session, player_name)
+
+    seasons = await season_stats(session, player_id=player.id, season=season)
+    if not seasons:
+        raise SeasonDataMissing(player.id, player.full_name, season)
+
+    return PlayerStatsResponse(
+        player=player_identity(player), game_type=REGULAR_SEASON, seasons=seasons
+    )
+
+
+async def resolve_player(session: AsyncSession, player_name: str) -> Player:
+    """Имя → игрок либо доменная ошибка с кандидатами. Общий вход Инструментов по игроку."""
     resolution = await resolve_player_name(session, player_name)
     match resolution:
         case UnknownName(query=query, nearest=nearest):
@@ -47,13 +60,22 @@ async def get_player_stats(
         case AmbiguousName(query=query, candidates=candidates):
             raise AmbiguousPlayerName(query, candidates)
         case ResolvedPlayer(player=player):
-            pass
+            return player
 
-    seasons = await season_stats(session, player_id=player.id, season=season)
-    if not seasons:
-        raise SeasonDataMissing(player.id, player.full_name, season)
 
-    return PlayerStatsResponse(player=_identity(player), game_type=REGULAR_SEASON, seasons=seasons)
+def counted_games() -> ColumnElement[bool]:
+    """Какие строки Box Score считаются проведёнными матчами сезона игрока.
+
+    Только регулярный чемпионат: без фильтра сезонные средние молча смешали бы предсезонку и
+    Матч всех звёзд с регуляркой. Строка без минут — это DND/NWT: игрок был в заявке, но не
+    выходил, и считать такие матчи проведёнными значит занижать все средние. До введения
+    минут (1951-52) NULL означает «метрика не считалась», а не DND — те сезоны фильтр
+    пропускает целиком, иначе они исчезли бы из карьеры.
+    """
+    return and_(
+        BoxScore.game_type == REGULAR_SEASON,
+        or_(BoxScore.minutes.is_not(None), BoxScore.season < METRIC_INTRODUCED["minutes"]),
+    )
 
 
 async def season_stats(
@@ -87,17 +109,7 @@ def _aggregate_statement(player_id: int, season: str | None) -> Select[Any]:
             func.sum(BoxScore.free_throws_made).label("free_throws_made"),
             func.sum(BoxScore.free_throws_attempted).label("free_throws_attempted"),
         )
-        .where(
-            BoxScore.player_id == player_id,
-            # Только регулярный чемпионат: без фильтра сезонные средние молча смешали бы
-            # предсезонку и Матч всех звёзд с регуляркой.
-            BoxScore.game_type == REGULAR_SEASON,
-            # Строка без минут — это DND/NWT: игрок был в заявке, но не выходил. Считать
-            # такие матчи проведёнными значит занижать все средние. До введения минут
-            # (1951-52) NULL означает «метрика не считалась», а не DND — те сезоны
-            # фильтр пропускает целиком, иначе они исчезли бы из карьеры.
-            or_(BoxScore.minutes.is_not(None), BoxScore.season < METRIC_INTRODUCED["minutes"]),
-        )
+        .where(BoxScore.player_id == player_id, counted_games())
         .group_by(BoxScore.season)
         .order_by(BoxScore.season)
     )
@@ -133,7 +145,7 @@ def _season_stats(row: Row[Any]) -> SeasonStats:
     )
 
 
-def _identity(player: Player) -> PlayerIdentity:
+def player_identity(player: Player) -> PlayerIdentity:
     return PlayerIdentity(
         player_id=player.id,
         full_name=player.full_name,
