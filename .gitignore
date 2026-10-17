@@ -25,6 +25,9 @@ backend/data/raw/
 *.csv
 !backend/tests/fixtures/**/*.csv
 
+# отчёты eval ответов (JSON + markdown) — артефакты прогона, не исходники
+backend/evals/reports/
+
 # ide / os
 .DS_Store
 .idea/

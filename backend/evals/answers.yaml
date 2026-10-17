@@ -1,0 +1,229 @@
+# Золотой набор ответов: вопросы к прод-агенту и эталонные факты. Прогон —
+# `uv run python -m court_vision.answer_eval` (см. README, «Eval ответов»).
+#
+# Числа в `reference` сняты с полной локальной базы (регулярный чемпионат, средние за игру,
+# округление half-up — то же, что отдаёт get_player_stats). Эталон — факты, а не готовая
+# формулировка: судья сверяет смысл. Каждый срез спринта добавляет сюда 3–6 вопросов под
+# свой Инструмент (comparison, similar, reports).
+#
+# Поля: id, category, question, reference, expect_tools (подмножество, обязано быть
+# вызвано), expect_sources (rulebook/wikipedia — Цитаты оттуда обязаны быть),
+# must_not_refuse (по умолчанию true; false — когда честный ответ и есть «нельзя»).
+
+# --- stats: сезонная статистика через get_player_stats ---
+- id: stats-lebron-2012-13
+  category: stats
+  question: Сколько очков, подборов и передач за игру набирал Леброн Джеймс в сезоне 2012-13?
+  reference:
+    - "25.1 очка за игру"
+    - "7.5 подбора за игру"
+    - "6.8 передачи за игру"
+  expect_tools: [get_player_stats]
+
+- id: stats-curry-2015-16
+  category: stats
+  question: Какой процент трёхочковых и сколько трёшек за игру забивал Стеф Карри в 2015-16?
+  reference:
+    - "45.4% с трёхочковых"
+    - "4.9 забитых трёхочковых за игру"
+    - "29.0 очка за игру"
+  expect_tools: [get_player_stats]
+
+- id: stats-durant-2013-14
+  category: stats
+  question: Сколько очков в среднем набирал Кевин Дюрант в сезоне 2013-14 и сколько матчей сыграл?
+  reference:
+    - "31.6 очка за игру"
+    - "82 матча"
+  expect_tools: [get_player_stats]
+
+- id: stats-jokic-2022-23
+  category: stats
+  question: Дай тройку очки-подборы-передачи Йокича за 2022-23.
+  reference:
+    - "24.5 очка за игру"
+    - "11.8 подбора за игру"
+    - "9.8 передачи за игру"
+  expect_tools: [get_player_stats]
+
+- id: stats-doncic-2023-24
+  category: stats
+  question: How many points and assists per game did Luka Doncic average in 2023-24?
+  reference:
+    - "33.9 очка за игру"
+    - "9.8 передачи за игру"
+    - "70 матчей"
+  expect_tools: [get_player_stats]
+
+- id: stats-giannis-2019-20
+  category: stats
+  question: Сколько подборов и блок-шотов за игру было у Янниса Адетокумбо (Giannis Antetokounmpo) в 2019-20?
+  reference:
+    - "13.4 подбора за игру"
+    - "1.0 блок-шота за игру"
+    - "29.0 очка за игру"
+  expect_tools: [get_player_stats]
+
+- id: stats-shaq-1999-00
+  category: stats
+  question: Какая у Шакила О'Нила была эффективность бросков с игры и сколько блоков в 1999-00?
+  reference:
+    - "57.4% с игры"
+    - "2.9 блок-шота за игру"
+    - "28.6 очка за игру"
+  expect_tools: [get_player_stats]
+
+# --- rules: правила по rulebook с цитатами ---
+- id: rules-shot-clock-reset
+  category: rules
+  question: На сколько секунд сбрасывается таймер атаки, если нападающие первыми получили мяч после неудачного штрафного, оставшегося в игре?
+  reference:
+    - "таймер атаки сбрасывается на 14 секунд (Rule 7, Sec. IV)"
+  expect_tools: [search_corpus]
+  expect_sources: [rulebook]
+
+- id: rules-six-fouls
+  category: rules
+  question: После какого по счёту персонального фола игрока удаляют из матча?
+  reference:
+    - "игрок дисквалифицируется после шестого персонального фола (Rule 3)"
+  expect_tools: [search_corpus]
+  expect_sources: [rulebook]
+
+- id: rules-offensive-three-seconds
+  category: rules
+  question: Сколько секунд игрок нападения может находиться в краске, пока его команда владеет мячом?
+  reference:
+    - "не более трёх секунд (правило трёх секунд в нападении, Rule 10)"
+  expect_tools: [search_corpus]
+  expect_sources: [rulebook]
+
+- id: rules-back-to-basket
+  category: rules
+  question: Сколько секунд можно вести мяч спиной к кольцу в передней зоне ниже линии штрафных?
+  reference:
+    - "не более пяти секунд"
+    - "наказание — потеря мяча"
+  expect_tools: [search_corpus]
+  expect_sources: [rulebook]
+
+- id: rules-goaltending
+  category: rules
+  question: Что такое голтендинг по правилам НБА?
+  reference:
+    - "нельзя касаться мяча на нисходящей траектории к кольцу выше уровня кольца или мяча, находящегося в корзине/на кольце"
+  expect_tools: [search_corpus]
+  expect_sources: [rulebook]
+
+# --- biography: карьера и люди вокруг игрока — цитаты Wikipedia ---
+- id: bio-kobe-entry
+  category: biography
+  question: Как Коби Брайант попал в НБА и за какую команду играл?
+  reference:
+    - "выбран на драфте 1996 сразу из школы, под 13-м номером (Шарлотт), обменян в Лейкерс"
+    - "всю карьеру провёл в Лос-Анджелес Лейкерс"
+  expect_tools: [get_player_stats, search_corpus]
+  expect_sources: [wikipedia]
+
+- id: bio-jordan-baseball
+  category: biography
+  question: Почему Майкл Джордан ушёл из баскетбола в 1993 году и чем занимался потом?
+  reference:
+    - "объявил об уходе в октябре 1993 после убийства отца"
+    - "играл в бейсбол в фарм-клубе (Бирмингем Баронс)"
+    - "вернулся в НБА в 1995"
+  expect_tools: [search_corpus]
+  expect_sources: [wikipedia]
+
+- id: bio-curry-father
+  category: biography
+  question: Кто отец Стефена Карри и чем он известен?
+  reference:
+    - "отец — Делл Карри, бывший игрок НБА (защитник), долго выступал за Шарлотт"
+  expect_tools: [search_corpus]
+  expect_sources: [wikipedia]
+
+- id: bio-jokic-path
+  category: biography
+  question: Откуда родом Никола Йокич и как он попал в НБА?
+  reference:
+    - "родом из Сербии"
+    - "выбран на драфте 2014 во втором раунде (41-м номером) Денвер Наггетс"
+  expect_tools: [search_corpus]
+  expect_sources: [wikipedia]
+
+- id: bio-magic-hiv
+  category: biography
+  question: Почему Мэджик Джонсон завершил карьеру в 1991 году?
+  reference:
+    - "в ноябре 1991 объявил, что у него ВИЧ, и завершил карьеру"
+  expect_tools: [search_corpus]
+  expect_sources: [wikipedia]
+
+# --- old_era: ранние эпохи, метрики которые не считались (null != ноль) ---
+- id: old-wilt-100
+  category: old_era
+  question: Расскажи про 100-очковый матч Уилта Чемберлена и каким был его сезон 1961-62.
+  reference:
+    - "100 очков в матче против Нью-Йорк Никс 2 марта 1962"
+    - "в сезоне 1961-62 в среднем 50.4 очка и 25.7 подбора за игру"
+  expect_tools: [get_player_stats, search_corpus]
+  expect_sources: [wikipedia]
+
+- id: old-russell-1964-65
+  category: old_era
+  question: Сколько подборов за игру собирал Билл Расселл в 1964-65?
+  reference:
+    - "24.1 подбора за игру"
+    - "14.1 очка за игру"
+  expect_tools: [get_player_stats]
+
+- id: old-oscar-triple-double
+  category: old_era
+  question: Оскар Робертсон в сезоне 1961-62 — какие у него средние очки, подборы и передачи?
+  reference:
+    - "30.8 очка, 12.5 подбора и 11.4 передачи за игру"
+  expect_tools: [get_player_stats]
+
+- id: old-kareem-blocks-1971-72
+  category: old_era
+  question: Сколько блок-шотов за игру делал Карим Абдул-Джаббар в сезоне 1971-72?
+  reference:
+    - "блоки в НБА начали считать с сезона 1973-74, за 1971-72 значение не записано (null), а не ноль"
+    - "в этом сезоне: 34.8 очка и 16.6 подбора за игру"
+  expect_tools: [get_player_stats]
+  # Правильный ответ объясняет отсутствие метрики — шаблон «данных нет» в нём законен.
+  must_not_refuse: false
+
+# --- ambiguity: неоднозначное и отсутствующее ---
+- id: amb-johnson
+  category: ambiguity
+  question: Сколько очков за игру набирал Джонсон в 2008-09?
+  reference:
+    - "имя неоднозначно (несколько игроков Johnson): ассистент просит уточнить или называет, какого именно выбрал, и не выдаёт цифры наугад"
+  expect_tools: [get_player_stats]
+  must_not_refuse: false
+
+- id: amb-unknown-player
+  category: ambiguity
+  question: Какая статистика у Васи Пупкина за 2015-16?
+  reference:
+    - "такого игрока нет в данных; ассистент сообщает об этом и не выдумывает цифры"
+  expect_tools: [get_player_stats]
+  must_not_refuse: false
+
+- id: amb-future-season
+  category: ambiguity
+  question: Сколько очков за игру набирал Леброн Джеймс в сезоне 2035-36?
+  reference:
+    - "данных за этот сезон нет; ассистент говорит об этом и не выдумывает цифры"
+  expect_tools: [get_player_stats]
+  must_not_refuse: false
+
+- id: amb-playoffs
+  category: ambiguity
+  question: Сколько очков за игру набирал Стеф Карри в плей-офф 2015-16?
+  reference:
+    - "данные есть только по регулярному чемпионату; по плей-офф цифр нет, и ассистент говорит об этом прямо"
+    - "если приводит цифры, то только регулярного чемпионата (29.0 очка за игру) с оговоркой"
+  must_not_refuse: false

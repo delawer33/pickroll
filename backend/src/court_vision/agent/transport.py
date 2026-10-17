@@ -90,6 +90,7 @@ async def stream(
     api_key: str | None = None,
     api_base: str | None = None,
     trace_metadata: dict[str, Any] | None = None,
+    response_format: dict[str, Any] | None = None,
 ) -> AsyncGenerator[TextDelta | LlmReply]:
     """Один вызов модели потоком: сначала `TextDelta` по мере поступления, в конце — ровно
     один `LlmReply` с собранным ответом целиком.
@@ -126,6 +127,9 @@ async def stream(
                 # Метаданные трассировки: их читают колбэки litellm (Langfuse), провайдеру
                 # они не уезжают. None, а не пустой словарь — чтобы не плодить пустые поля.
                 metadata=trace_metadata or None,
+                # Structured output (JSON Schema) — для вызовов без Инструментов, которым
+                # нужен разбираемый ответ: LLM-судья eval. None = обычный текст.
+                response_format=response_format,
             )
             # aclosing, а не просто `async for`: цикл сам за собой итератор не закрывает, а
             # брошенный поток провайдера держит открытым HTTP-соединение до сборки мусора —
