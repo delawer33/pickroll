@@ -1,4 +1,4 @@
-import { PanelLeftClose, PanelLeftOpen, SquarePen } from 'lucide-react'
+import { FileText, PanelLeftClose, PanelLeftOpen, SquarePen } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { NavItem } from '@/shared/ui/NavItem'
@@ -44,6 +44,16 @@ export function Rail({ collapsed, onCollapsedChange, open, onNavigate, recent }:
           onNavigate={onNavigate}
         >
           New conversation
+        </NavItem>
+
+        <RailGroup label="Reports" collapsed={collapsed} />
+        <NavItem
+          to="/reports"
+          collapsed={collapsed}
+          icon={<FileText size={14} />}
+          onNavigate={onNavigate}
+        >
+          Scouting reports
         </NavItem>
 
         <RailGroup label="Recent" collapsed={collapsed} />

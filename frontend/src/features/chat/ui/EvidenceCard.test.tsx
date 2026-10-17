@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ToolCall } from '@/features/chat/model/types'
 import { EvidenceCard } from '@/features/chat/ui/EvidenceCard'
-import { renderWithProviders } from '@/test/render'
+import { renderWithProviders, renderWithRouter } from '@/test/render'
 
 /** Три состояния одного вызова. Событий про вызов приходит два — `tool_call` до
  * выполнения Инструмента и `tool_result` после, — поэтому карточка обязана быть
@@ -218,8 +218,8 @@ describe('EvidenceCard', () => {
     expect(screen.getByText('Reb/36 +1.2 / −0.4')).toBeInTheDocument()
   })
 
-  it('отчёт показывает анонс со ссылкой на страницу отчёта', () => {
-    renderWithProviders(
+  it('отчёт показывает анонс со ссылкой на страницу отчёта', async () => {
+    await renderWithRouter(
       <EvidenceCard
         toolCall={{
           ...CALLED,
@@ -254,8 +254,8 @@ describe('EvidenceCard', () => {
     expect(screen.queryByText(/^\d\.\d{3}$/)).not.toBeInTheDocument()
   })
 
-  it('выдача поиска по отчётам показывает близость каждого', () => {
-    renderWithProviders(
+  it('выдача поиска по отчётам показывает близость каждого', async () => {
+    await renderWithRouter(
       <EvidenceCard
         toolCall={{
           ...CALLED,

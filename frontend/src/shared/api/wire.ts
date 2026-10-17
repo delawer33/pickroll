@@ -28,6 +28,14 @@ export type CitationEvent = Schemas['CitationEvent']
 export type DoneEvent = Schemas['DoneEvent']
 export type ErrorEvent = Schemas['ErrorEvent']
 
+export type ReportSummary = Schemas['ReportSummary']
+export type ReportResponse = Schemas['ReportResponse']
+export type ReportCreate = Schemas['ReportCreate']
+/** Снапшот отчёта по ходу генерации: каждое поле появляется, когда модель дописала раздел. */
+export type PartialScoutingReport = Schemas['PartialScoutingReport']
+/** Событие SSE-потока `POST /reports`: `snapshot`, затем `done` либо `error`. */
+export type ReportStreamEvent = Schemas['ReportStreamEvent']
+
 /** Страница cursor-пагинации. В OpenAPI это отдельная модель на каждый тип элемента
  * (`Page_ConversationSummary_`), а по смыслу — одна форма. */
 export interface Page<ItemT> {

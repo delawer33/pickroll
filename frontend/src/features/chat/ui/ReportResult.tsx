@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router'
+
 import type { ReportItem } from '@/features/chat/model/types'
 
 export interface ReportResultProps {
@@ -22,14 +24,13 @@ export function ReportResult({ items }: ReportResultProps) {
           </p>
           <p className="t-micro text-ink-muted">{item.archetype}</p>
           <p className="t-body-sm text-ink-secondary">{item.summary}</p>
-          {/* Обычная ссылка, а не Link роутера: страница отчётов приезжает следующим
-              срезом, и типизированного маршрута `/reports/$id` в дереве ещё нет. */}
-          <a
-            href={item.url}
+          <Link
+            to="/reports/$reportId"
+            params={{ reportId: item.report_id }}
             className="t-body-sm cv-transition-fast w-fit text-accent-text underline underline-offset-2"
           >
             Open full report
-          </a>
+          </Link>
         </li>
       ))}
     </ul>

@@ -14,6 +14,9 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as AppChatIndexRouteImport } from './routes/_app.chat.index'
 import { Route as AppChatConversationIdRouteImport } from './routes/_app.chat.$conversationId'
+import { Route as AppReportsIndexRouteImport } from './routes/_app.reports.index'
+import { Route as AppReportsReportIdRouteImport } from './routes/_app.reports.$reportId'
+import { Route as AppReportsNewRouteImport } from './routes/_app.reports.new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -39,18 +42,39 @@ const AppChatConversationIdRoute = AppChatConversationIdRouteImport.update({
   path: '/chat/$conversationId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppReportsIndexRoute = AppReportsIndexRouteImport.update({
+  id: '/reports/',
+  path: '/reports/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsReportIdRoute = AppReportsReportIdRouteImport.update({
+  id: '/reports/$reportId',
+  path: '/reports/$reportId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReportsNewRoute = AppReportsNewRouteImport.update({
+  id: '/reports/new',
+  path: '/reports/new',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/chat/$conversationId': typeof AppChatConversationIdRoute
+  '/reports/$reportId': typeof AppReportsReportIdRoute
+  '/reports/new': typeof AppReportsNewRoute
   '/chat/': typeof AppChatIndexRoute
+  '/reports/': typeof AppReportsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/chat/$conversationId': typeof AppChatConversationIdRoute
+  '/reports/$reportId': typeof AppReportsReportIdRoute
+  '/reports/new': typeof AppReportsNewRoute
   '/chat': typeof AppChatIndexRoute
+  '/reports': typeof AppReportsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,20 +82,40 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/sign-in/$': typeof SignInSplatRoute
   '/_app/chat/$conversationId': typeof AppChatConversationIdRoute
+  '/_app/reports/$reportId': typeof AppReportsReportIdRoute
+  '/_app/reports/new': typeof AppReportsNewRoute
   '/_app/chat/': typeof AppChatIndexRoute
+  '/_app/reports/': typeof AppReportsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/sign-in/$' | '/chat/$conversationId' | '/chat/'
+  fullPaths:
+    | '/'
+    | '/sign-in/$'
+    | '/chat/$conversationId'
+    | '/reports/$reportId'
+    | '/reports/new'
+    | '/chat/'
+    | '/reports/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in/$' | '/chat/$conversationId' | '/chat'
+  to:
+    | '/'
+    | '/sign-in/$'
+    | '/chat/$conversationId'
+    | '/reports/$reportId'
+    | '/reports/new'
+    | '/chat'
+    | '/reports'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/sign-in/$'
     | '/_app/chat/$conversationId'
+    | '/_app/reports/$reportId'
+    | '/_app/reports/new'
     | '/_app/chat/'
+    | '/_app/reports/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,17 +161,44 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChatConversationIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/reports/': {
+      id: '/_app/reports/'
+      path: '/reports'
+      fullPath: '/reports/'
+      preLoaderRoute: typeof AppReportsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports/$reportId': {
+      id: '/_app/reports/$reportId'
+      path: '/reports/$reportId'
+      fullPath: '/reports/$reportId'
+      preLoaderRoute: typeof AppReportsReportIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/reports/new': {
+      id: '/_app/reports/new'
+      path: '/reports/new'
+      fullPath: '/reports/new'
+      preLoaderRoute: typeof AppReportsNewRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
   AppChatConversationIdRoute: typeof AppChatConversationIdRoute
+  AppReportsReportIdRoute: typeof AppReportsReportIdRoute
+  AppReportsNewRoute: typeof AppReportsNewRoute
   AppChatIndexRoute: typeof AppChatIndexRoute
+  AppReportsIndexRoute: typeof AppReportsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppChatConversationIdRoute: AppChatConversationIdRoute,
+  AppReportsReportIdRoute: AppReportsReportIdRoute,
+  AppReportsNewRoute: AppReportsNewRoute,
   AppChatIndexRoute: AppChatIndexRoute,
+  AppReportsIndexRoute: AppReportsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

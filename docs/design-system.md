@@ -443,8 +443,9 @@ light / **11.6** dark при цели ≥8; нормальное зрение **
 | `/players` | справочник Игроков | Grid | позже |
 | `/players/$playerId` | карточка Игрока | Sheet | позже |
 | `/compare` | Сравнение игроков (`?players=`) | Grid | позже |
-| `/reports` | список Скаутинг-отчётов | Spine | позже |
-| `/reports/$reportId` | Отчёт | Sheet | позже |
+| `/reports` | список Скаутинг-отчётов (`?player=` — фильтр по игроку) | Spine | #27 |
+| `/reports/new` | новый отчёт: форма и стриминг разделов | Sheet | #27 |
+| `/reports/$reportId` | Отчёт | Sheet | #27 |
 | `/digest` | Дайджест | Spine | позже |
 | `/watchlist` | Вотчлист | Grid | позже |
 | `/usage` | Дашборд стоимости | Sheet | позже |
