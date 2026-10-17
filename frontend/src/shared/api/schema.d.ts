@@ -96,6 +96,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Own Reports
+         * @description Свои отчёты, свежие сверху. Чужих в списке не бывает.
+         */
+        get: operations["list_own_reports_api_v1_reports_get"];
+        put?: never;
+        /**
+         * Заказать отчёт и получить его потоком снапшотов
+         * @description Стримит генерацию событиями SSE: `snapshot` (частичный отчёт, заменяет предыдущий),
+         *     затем `done` с идентификатором сохранённого отчёта — либо `error` вместо `done`.
+         *
+         *     Сессия запроса не берётся намеренно: тело потока генерируется после возврата из
+         *     обработчика, и транзакция запроса висела бы открытой всё время ответа модели.
+         */
+        post: operations["order_report_api_v1_reports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Report
+         * @description Отчёт целиком. Чужой отчёт — 404.
+         */
+        get: operations["read_report_api_v1_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -182,6 +230,18 @@ export interface components {
              * @enum {string}
              */
             type: "citation";
+        };
+        /**
+         * Comparable
+         * @description Сопоставимый игрок — строго из результатов поиска Похожих игроков во входе.
+         */
+        Comparable: {
+            /** Player Name */
+            player_name: string;
+            /** Reason */
+            reason: string;
+            /** Season */
+            season: string;
         };
         /**
          * ComparisonCell
@@ -292,7 +352,7 @@ export interface components {
          * EvidenceView
          * @description Результат Инструмента в форме, пригодной для карточки. Дискриминатор — `kind`.
          */
-        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["ComparisonView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"] | components["schemas"]["SimilarView"];
+        EvidenceView: components["schemas"]["TableView"] | components["schemas"]["BarsView"] | components["schemas"]["ComparisonView"] | components["schemas"]["QuoteView"] | components["schemas"]["QuotesView"] | components["schemas"]["SimilarView"] | components["schemas"]["ReportView"];
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -358,6 +418,56 @@ export interface components {
              * @description Курсор следующей страницы; `null` — страница последняя. Опаковый.
              */
             next_cursor?: string | null;
+        };
+        /** Page[ReportSummary] */
+        Page_ReportSummary_: {
+            /** Items */
+            items: components["schemas"]["ReportSummary"][];
+            /**
+             * Next Cursor
+             * @description Курсор следующей страницы; `null` — страница последняя. Опаковый.
+             */
+            next_cursor?: string | null;
+        };
+        /** PartialComparable */
+        PartialComparable: {
+            /** Player Name */
+            player_name?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Season */
+            season?: string | null;
+        };
+        /** PartialReportPoint */
+        PartialReportPoint: {
+            /** Claim */
+            claim?: string | null;
+            /** Metrics */
+            metrics?: string[];
+        };
+        /**
+         * PartialScoutingReport
+         * @description Снапшот отчёта по ходу генерации: то, что модель успела дописать к этому моменту.
+         *
+         *     Каждое поле необязательно — раздел появляется, когда модель его закончила. Снапшот
+         *     всегда целиком заменяет предыдущий, а не дополняет его: после повтора генерации поток
+         *     начинается с пустого снапшота.
+         */
+        PartialScoutingReport: {
+            /** Archetype */
+            archetype?: string | null;
+            /** Comparables */
+            comparables?: components["schemas"]["PartialComparable"][] | null;
+            /** Outlook */
+            outlook?: string | null;
+            /** Stat Profile */
+            stat_profile?: string | null;
+            /** Strengths */
+            strengths?: components["schemas"]["PartialReportPoint"][] | null;
+            /** Summary */
+            summary?: string | null;
+            /** Weaknesses */
+            weaknesses?: components["schemas"]["PartialReportPoint"][] | null;
         };
         /**
          * PlayerIdentity
@@ -451,6 +561,199 @@ export interface components {
             kind: "quotes";
             /** Quotes */
             quotes: components["schemas"]["Quote"][];
+        };
+        /**
+         * ReportCreate
+         * @description Заказ отчёта: игрок и сезон. Без сезона берётся последний сезон игрока.
+         */
+        ReportCreate: {
+            /**
+             * Language
+             * @description Язык текста отчёта; ключи метрик и имена не переводятся.
+             * @default en
+             * @enum {string}
+             */
+            language: "ru" | "en";
+            /**
+             * Player Name
+             * @description Имя игрока латиницей, например `Jalen Brunson`. Опечатки допустимы.
+             */
+            player_name: string;
+            /**
+             * Season
+             * @description Сезон вида `2023-24`. Без него берётся последний сезон игрока.
+             */
+            season?: string | null;
+        };
+        /**
+         * ReportDoneEvent
+         * @description Отчёт сгенерирован, провалидирован и сохранён.
+         */
+        ReportDoneEvent: {
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "done";
+        };
+        /**
+         * ReportErrorEvent
+         * @description Отчёт не получился и не сохранён. Приходит вместо `done` — поток закрывается штатно.
+         */
+        ReportErrorEvent: {
+            problem: components["schemas"]["Problem"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "error";
+        };
+        /**
+         * ReportItem
+         * @description Скаутинг-отчёт в карточке: кто, когда, резюме и ссылка на полную страницу.
+         */
+        ReportItem: {
+            /** Archetype */
+            archetype: string;
+            /** Player */
+            player: string;
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Season */
+            season: string;
+            /** Similarity */
+            similarity?: number | null;
+            /** Summary */
+            summary: string;
+            /** Url */
+            url: string;
+        };
+        /** ReportPlayer */
+        ReportPlayer: {
+            /** Full Name */
+            full_name: string;
+            /** Player Id */
+            player_id: number;
+        };
+        /**
+         * ReportPoint
+         * @description Сильная или слабая сторона: утверждение и метрики входа, на которых оно держится.
+         */
+        ReportPoint: {
+            /** Claim */
+            claim: string;
+            /** Metrics */
+            metrics: string[];
+        };
+        /**
+         * ReportResponse
+         * @description Отчёт целиком.
+         */
+        ReportResponse: {
+            /** Archetype */
+            archetype: string;
+            content: components["schemas"]["ScoutingReportContent"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Model */
+            model: string;
+            player: components["schemas"]["ReportPlayer"];
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Schema Version */
+            schema_version: number;
+            /** Season */
+            season: string;
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * ReportSnapshotEvent
+         * @description Снапшот отчёта по ходу генерации; заменяет предыдущий целиком.
+         */
+        ReportSnapshotEvent: {
+            report: components["schemas"]["PartialScoutingReport"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "snapshot";
+        };
+        /**
+         * ReportStreamEvent
+         * @description Событие SSE-потока `POST /reports`. Дискриминатор — поле `type`.
+         */
+        ReportStreamEvent: components["schemas"]["ReportSnapshotEvent"] | components["schemas"]["ReportDoneEvent"] | components["schemas"]["ReportErrorEvent"];
+        /**
+         * ReportSummary
+         * @description Строка списка отчётов.
+         */
+        ReportSummary: {
+            /** Archetype */
+            archetype: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            player: components["schemas"]["ReportPlayer"];
+            /**
+             * Report Id
+             * Format: uuid
+             */
+            report_id: string;
+            /** Season */
+            season: string;
+            /** Summary */
+            summary: string;
+        };
+        /**
+         * ReportView
+         * @description Отчёты в карточке Evidence: один созданный (`create_scouting_report`) или найденные
+         *     среди своих (`search_reports`). Карточка — анонс, сам отчёт живёт на своей странице.
+         */
+        ReportView: {
+            /** Items */
+            items: components["schemas"]["ReportItem"][];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "report";
+        };
+        /**
+         * ScoutingReportContent
+         * @description Содержимое отчёта: фиксированные разделы, чтобы отчёты были сравнимы между собой.
+         */
+        ScoutingReportContent: {
+            /** Archetype */
+            archetype: string;
+            /** Comparables */
+            comparables: components["schemas"]["Comparable"][];
+            /** Outlook */
+            outlook: string;
+            /** Stat Profile */
+            stat_profile: string;
+            /** Strengths */
+            strengths: components["schemas"]["ReportPoint"][];
+            /** Summary */
+            summary: string;
+            /** Weaknesses */
+            weaknesses: components["schemas"]["ReportPoint"][];
         };
         /**
          * SeasonAverages
@@ -881,6 +1184,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlayerStatsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_own_reports_api_v1_reports_get: {
+        parameters: {
+            query?: {
+                /** @description Размер страницы. */
+                limit?: number;
+                /** @description Курсор из `next_cursor` предыдущей страницы. Опаковый — не разбирать. */
+                cursor?: string | null;
+                /** @description Только отчёты по этому игроку. */
+                player_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page_ReportSummary_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    order_report_api_v1_reports_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_report_api_v1_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Идентификатор отчёта. */
+                report_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
                 };
             };
             /** @description Validation Error */

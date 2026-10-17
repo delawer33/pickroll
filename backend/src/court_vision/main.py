@@ -15,6 +15,7 @@ from court_vision.logging import configure_logging
 from court_vision.observability import configure_llm_observability
 from court_vision.players.router import router as players_router
 from court_vision.problems import install_problem_handlers
+from court_vision.reports.router import router as reports_router
 
 API_V1_PREFIX = "/api/v1"
 
@@ -62,6 +63,7 @@ def _api_v1_router() -> APIRouter:
     router.include_router(auth_router)
     router.include_router(conversations_router)
     router.include_router(players_router)
+    router.include_router(reports_router)
     return router
 
 

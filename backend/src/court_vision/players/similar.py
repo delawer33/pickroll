@@ -43,8 +43,16 @@ async def find_similar_players(
 ) -> SimilarPlayersResponse:
     """Ближайшие по косинусу отпечатки; сам игрок исключён, у каждого игрока — его самый
     близкий сезон. Без сезона отправная точка — последний сезон игрока с отпечатком."""
+    return await similar_players_for(
+        session, player=await resolve_player(session, player_name), season=season, limit=limit
+    )
+
+
+async def similar_players_for(
+    session: AsyncSession, *, player: Player, season: str | None = None, limit: int = DEFAULT_LIMIT
+) -> SimilarPlayersResponse:
+    """То же для уже опознанного игрока (см. `player_percentiles`)."""
     limit = max(1, min(limit, MAX_LIMIT))
-    player = await resolve_player(session, player_name)
     target = await _target_fingerprint(session, player, season)
 
     distance = PlayerFingerprint.embedding.cosine_distance(target.embedding)

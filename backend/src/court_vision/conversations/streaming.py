@@ -101,6 +101,7 @@ async def reply_events(
             session_factory,
             history=history,
             settings=settings,
+            clerk_user_id=clerk_user_id,
             trace_metadata=_trace_metadata(
                 conversation_id=conversation_id, clerk_user_id=clerk_user_id
             ),

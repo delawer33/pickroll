@@ -8,6 +8,7 @@ from court_vision.agent.models import LlmUsage
 from court_vision.conversations.models import Conversation, Message
 from court_vision.corpus.models import Chunk, Document
 from court_vision.players.models import BoxScore, Game, Player, PlayerFingerprint, Team
+from court_vision.reports.models import ScoutingReport
 
 __all__ = [
     "BoxScore",
@@ -19,5 +20,6 @@ __all__ = [
     "Message",
     "Player",
     "PlayerFingerprint",
+    "ScoutingReport",
     "Team",
 ]

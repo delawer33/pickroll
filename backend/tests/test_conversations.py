@@ -399,6 +399,7 @@ async def test_события_потока_описаны_в_openapi(app: FastAP
         "quote",
         "quotes",
         "similar",
+        "report",
     }
     # Событие `citation` — факт цитаты целиком: маркер, вызов и чанк корпуса.
     assert set(schemas["CitationEvent"]["properties"]) >= {

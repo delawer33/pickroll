@@ -217,4 +217,68 @@ describe('EvidenceCard', () => {
     // Минус — настоящий, не дефис: z-score ниже лиги читается рядом с плюсами.
     expect(screen.getByText('Reb/36 +1.2 / −0.4')).toBeInTheDocument()
   })
+
+  it('отчёт показывает анонс со ссылкой на страницу отчёта', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          ...CALLED,
+          name: 'create_scouting_report',
+          durationMs: 41200,
+          result: {
+            kind: 'report',
+            items: [
+              {
+                report_id: '3f5c1a7e-0000-4000-8000-000000000001',
+                player: 'Jalen Brunson',
+                season: '2023-24',
+                archetype: 'Primary scoring guard',
+                summary: 'Brunson scored 28.7 points per game on strong efficiency.',
+                url: '/reports/3f5c1a7e-0000-4000-8000-000000000001',
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('Jalen Brunson')).toBeInTheDocument()
+    expect(screen.getByText('2023-24')).toBeInTheDocument()
+    expect(screen.getByText('Primary scoring guard')).toBeInTheDocument()
+    expect(screen.getByText(/28\.7 points per game/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open full report' })).toHaveAttribute(
+      'href',
+      '/reports/3f5c1a7e-0000-4000-8000-000000000001',
+    )
+    // Близость есть только у выдачи поиска — у созданного отчёта её нет.
+    expect(screen.queryByText(/^\d\.\d{3}$/)).not.toBeInTheDocument()
+  })
+
+  it('выдача поиска по отчётам показывает близость каждого', () => {
+    renderWithProviders(
+      <EvidenceCard
+        toolCall={{
+          ...CALLED,
+          name: 'search_reports',
+          durationMs: 38,
+          result: {
+            kind: 'report',
+            items: [
+              {
+                report_id: '3f5c1a7e-0000-4000-8000-000000000002',
+                player: 'Jalen Brunson',
+                season: '2022-23',
+                archetype: 'Scoring guard',
+                summary: 'Earlier look at Brunson.',
+                url: '/reports/3f5c1a7e-0000-4000-8000-000000000002',
+                similarity: 0.874,
+              },
+            ],
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('0.874')).toBeInTheDocument()
+  })
 })

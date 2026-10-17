@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
+from contextlib import aclosing
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
 
@@ -27,6 +28,7 @@ from court_vision.agent.evidence import (
     project_compare_players,
     project_player_percentiles,
     project_player_stats,
+    project_reports,
     project_search_corpus,
     project_similar_players,
 )
@@ -37,9 +39,13 @@ from court_vision.corpus.search import search
 from court_vision.errors import DomainError
 from court_vision.players.percentiles import get_player_percentiles
 from court_vision.players.schemas import SEASON_PATTERN, PlayerComparisonResponse
-from court_vision.players.service import get_player_stats
+from court_vision.players.service import get_player_stats, resolve_player
 from court_vision.players.similar import DEFAULT_LIMIT, MAX_LIMIT, find_similar_players
 from court_vision.problems import PROBLEM_TYPE_PREFIX
+from court_vision.reports.inputs import build_report_input
+from court_vision.reports.models import ScoutingReport
+from court_vision.reports.schemas import ReportLanguage, ReportsToolResult
+from court_vision.reports.service import brief, produce_report, search_reports
 
 if TYPE_CHECKING:
     # Только аннотации: рантайм-импорт зациклил бы модули (loop импортирует tools).
@@ -273,6 +279,131 @@ async def run_find_similar_players(
     return similar.model_dump(mode="json")
 
 
+class CreateScoutingReportArgs(BaseModel):
+    player_name: str = Field(
+        min_length=1,
+        max_length=128,
+        description="Имя игрока латиницей, например `Jalen Brunson`. Опечатки допустимы.",
+    )
+    season: str | None = Field(
+        default=None,
+        pattern=SEASON_PATTERN,
+        description="Сезон вида `2023-24`. Без него берётся последний сезон игрока.",
+    )
+    language: ReportLanguage = Field(
+        default="en",
+        description="Язык текста отчёта: `ru`, если пользователь пишет по-русски, иначе `en`.",
+    )
+
+
+async def run_create_scouting_report(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = CreateScoutingReportArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _invalid_arguments(error)
+
+    try:
+        report_input = await build_report_input(
+            session, player_name=args.player_name, season=args.season, language=args.language
+        )
+    except DomainError as error:
+        return _error_result(_kind(error), error.detail, error.extensions())
+    # Чтения закончены, а генерация длится десятки секунд: транзакция сессии Инструмента всё
+    # это время держала бы соединение пула. Дальше отчёт берёт свои короткие транзакции сам.
+    await session.rollback()
+
+    report: ScoutingReport | None = None
+    try:
+        # Без стриминга: внутри цикла агента снапшоты некому показывать, нужен готовый отчёт.
+        async with aclosing(
+            produce_report(
+                ctx.session_factory,
+                settings=ctx.settings,
+                clerk_user_id=ctx.clerk_user_id,
+                report_input=report_input,
+                trace_metadata={"trace_user_id": ctx.clerk_user_id},
+            )
+        ) as produced:
+            async for item in produced:
+                if isinstance(item, ScoutingReport):
+                    report = item
+    except DomainError as error:
+        # Невалидный отчёт после повтора — отказ Инструмента, а не сбой ответа: модель
+        # честно скажет пользователю, что отчёт не вышел, и предложит повторить.
+        return _error_result(_kind(error), error.detail, error.extensions())
+    if report is None:  # pragma: no cover — поток производства заканчивается отчётом или ошибкой
+        return _error_result("tool-failed", "Отчёт не был создан.", {"retryable": True})
+
+    return ReportsToolResult(
+        reports=[brief(report, report_input.player.full_name, with_content=True)]
+    ).model_dump(mode="json")
+
+
+class SearchReportsArgs(BaseModel):
+    query: str = Field(
+        min_length=1,
+        max_length=256,
+        description="О чём искать, по смыслу: `Brunson clutch scoring`, `отчёты про центровых`.",
+    )
+    player_name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        description="Имя игрока латиницей — сузить поиск до отчётов по нему.",
+    )
+
+
+async def run_search_reports(
+    session: AsyncSession, arguments: Mapping[str, Any], ctx: ToolContext
+) -> ToolResult:
+    try:
+        args = SearchReportsArgs.model_validate(arguments)
+    except ValidationError as error:
+        return _invalid_arguments(error)
+
+    player_id: int | None = None
+    if args.player_name is not None:
+        try:
+            player_id = (await resolve_player(session, args.player_name)).id
+        except DomainError as error:
+            return _error_result(_kind(error), error.detail, error.extensions())
+
+    settings = ctx.settings
+    (query_embedding,) = await embed(
+        ctx.session_factory,
+        model=settings.embedding_model,
+        texts=[args.query],
+        dimensions=settings.embedding_dimensions,
+        timeout=settings.llm_timeout_seconds,
+        operation="agent.search_reports",
+        api_key=settings.llm_api_key,
+        api_base=settings.llm_api_base,
+    )
+    # Владелец — из контекста хода, а не из аргументов: модель чужого пользователя назвать
+    # не может, а запрос без этого условия в сервисе не выражается.
+    reports = await search_reports(
+        session,
+        clerk_user_id=ctx.clerk_user_id,
+        query_embedding=query_embedding,
+        player_id=player_id,
+    )
+    return ReportsToolResult(reports=reports).model_dump(mode="json")
+
+
+def _invalid_arguments(error: ValidationError) -> ToolResult:
+    return _error_result(
+        "invalid-arguments",
+        "Аргументы не прошли валидацию.",
+        {
+            "errors": [
+                {"location": list(item["loc"]), "message": item["msg"]} for item in error.errors()
+            ]
+        },
+    )
+
+
 # Аргументы `search_corpus`. Описания — для модели, см. GetPlayerStatsArgs.
 class SearchCorpusArgs(BaseModel):
     query: str = Field(
@@ -409,11 +540,29 @@ FIND_SIMILAR_PLAYERS: Final = Tool(
     project=project_similar_players,
 )
 
+CREATE_SCOUTING_REPORT: Final = Tool(
+    name="create_scouting_report",
+    description=load_prompt("tools/create_scouting_report"),
+    parameters=_arguments_schema(CreateScoutingReportArgs),
+    run=run_create_scouting_report,
+    project=project_reports,
+)
+
+SEARCH_REPORTS: Final = Tool(
+    name="search_reports",
+    description=load_prompt("tools/search_reports"),
+    parameters=_arguments_schema(SearchReportsArgs),
+    run=run_search_reports,
+    project=project_reports,
+)
+
 TOOLS: Final = (
     GET_PLAYER_STATS,
     GET_PLAYER_PERCENTILES,
     COMPARE_PLAYERS,
     FIND_SIMILAR_PLAYERS,
+    CREATE_SCOUTING_REPORT,
+    SEARCH_REPORTS,
     SEARCH_CORPUS,
 )
 TOOLS_BY_NAME: Final = {tool.name: tool for tool in TOOLS}

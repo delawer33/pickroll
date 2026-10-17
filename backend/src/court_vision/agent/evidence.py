@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
+from uuid import UUID
 
 import structlog
 from pydantic import BaseModel, Field, RootModel, ValidationError
@@ -27,6 +28,7 @@ from court_vision.players.schemas import (
     SeasonStats,
     SimilarPlayersResponse,
 )
+from court_vision.reports.schemas import ReportsToolResult
 
 log = structlog.get_logger(__name__)
 
@@ -155,10 +157,38 @@ class SimilarView(BaseModel):
     items: list[SimilarItem]
 
 
+class ReportItem(BaseModel):
+    """Скаутинг-отчёт в карточке: кто, когда, резюме и ссылка на полную страницу."""
+
+    report_id: UUID
+    player: str
+    season: str
+    archetype: str
+    summary: str
+    # Путь страницы отчёта во фронте (`/reports/{id}`).
+    url: str
+    # Косинусная близость резюме запросу; только у выдачи `search_reports`.
+    similarity: float | None = None
+
+
+class ReportView(BaseModel):
+    """Отчёты в карточке Evidence: один созданный (`create_scouting_report`) или найденные
+    среди своих (`search_reports`). Карточка — анонс, сам отчёт живёт на своей странице."""
+
+    kind: Literal["report"] = "report"
+    items: list[ReportItem]
+
+
 class EvidenceView(
     RootModel[
         Annotated[
-            TableView | BarsView | ComparisonView | QuoteView | QuotesView | SimilarView,
+            TableView
+            | BarsView
+            | ComparisonView
+            | QuoteView
+            | QuotesView
+            | SimilarView
+            | ReportView,
             Field(discriminator="kind"),
         ]
     ]
@@ -270,6 +300,34 @@ def project_similar_players(result: Mapping[str, Any]) -> EvidenceView | None:
                 )
                 for item in similar.similar_players
             ],
+        )
+    )
+
+
+def project_reports(result: Mapping[str, Any]) -> EvidenceView | None:
+    """Отчёты — анонсы: резюме и ссылка, без разделов (они на странице отчёта)."""
+    try:
+        found = ReportsToolResult.model_validate(result)
+    except ValidationError:
+        # См. project_player_stats: рассогласование схемы с самой собой не роняет ответ.
+        log.warning("agent.evidence_projection_failed", tool="reports", exc_info=True)
+        return None
+    if not found.reports:
+        return None
+    return EvidenceView(
+        ReportView(
+            items=[
+                ReportItem(
+                    report_id=item.report_id,
+                    player=item.player.full_name,
+                    season=item.season,
+                    archetype=item.archetype,
+                    summary=item.summary,
+                    url=item.url,
+                    similarity=item.similarity,
+                )
+                for item in found.reports
+            ]
         )
     )
 

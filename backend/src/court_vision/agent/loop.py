@@ -130,6 +130,9 @@ class ToolContext:
     tool_call_id: str
     session_factory: async_sessionmaker[AsyncSession]
     settings: Settings
+    # Кто спрашивает. Нужен Инструментам, чьи данные личные (Скаутинг-отчёты): они фильтруют
+    # по нему сами, модель его не передаёт и подменить не может.
+    clerk_user_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +197,7 @@ async def stream_answer(
     *,
     history: Sequence[Turn],
     settings: Settings,
+    clerk_user_id: str,
     trace_metadata: dict[str, Any] | None = None,
 ) -> AsyncGenerator[AgentEvent]:
     """Прогоняет цикл, отдавая события по мере их появления; последнее — `AgentAnswer`.
@@ -264,6 +268,7 @@ async def stream_answer(
                 tool_call_id=call.id,
                 session_factory=session_factory,
                 settings=settings,
+                clerk_user_id=clerk_user_id,
             )
             invocation = await _invoke(session_factory, call, ctx)
             invocations.append(invocation)

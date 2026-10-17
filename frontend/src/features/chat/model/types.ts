@@ -58,6 +58,19 @@ export interface ComparisonMetric {
   cells: ComparisonCell[]
 }
 
+/** Скаутинг-отчёт в карточке: анонс с резюме и ссылкой на страницу отчёта. */
+export interface ReportItem {
+  report_id: string
+  player: string
+  season: string
+  archetype: string
+  summary: string
+  /** Путь страницы отчёта во фронте (`/reports/{id}`). */
+  url: string
+  /** Близость резюме запросу; только у выдачи `search_reports`. */
+  similarity?: number | null
+}
+
 /** Результат Инструмента — то, что показывается в карточке Evidence. */
 export type ToolResult =
   | { kind: 'table'; columns: string[]; rows: string[][] }
@@ -75,6 +88,8 @@ export type ToolResult =
   | { kind: 'quotes'; quotes: Quote[] }
   /** Похожие игроки: список игрок-сезонов с объяснением сходства признаками. */
   | { kind: 'similar'; caption: string; items: SimilarItem[] }
+  /** Скаутинг-отчёты: созданный (`create_scouting_report`) или найденные (`search_reports`). */
+  | { kind: 'report'; items: ReportItem[] }
   /** Динамика по сезонам: линия на сезон-ось, у каждой серии своё имя и слот палитры. */
   | { kind: 'series'; metric: string; unit: string; series: Series[] }
 

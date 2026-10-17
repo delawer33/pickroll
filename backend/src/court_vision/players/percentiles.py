@@ -17,7 +17,7 @@ from sqlalchemy import Numeric, Select, cast, func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from court_vision.players.errors import SeasonDataMissing
-from court_vision.players.models import REGULAR_SEASON, BoxScore, Game
+from court_vision.players.models import REGULAR_SEASON, BoxScore, Game, Player
 from court_vision.players.schemas import MetricPercentile, PlayerPercentilesResponse
 from court_vision.players.service import counted_games, player_identity, resolve_player
 from court_vision.rounding import round_half_up
@@ -68,8 +68,16 @@ async def get_player_percentiles(
     Неквалифицированный игрок не ошибка: Перцентили считаются относительно выборки, а флаг
     `qualified=False` говорит, что доверять им вслепую нельзя.
     """
-    player = await resolve_player(session, player_name)
+    return await player_percentiles(
+        session, player=await resolve_player(session, player_name), season=season
+    )
 
+
+async def player_percentiles(
+    session: AsyncSession, *, player: Player, season: str | None = None
+) -> PlayerPercentilesResponse:
+    """То же для уже опознанного игрока: сборщик отчёта резолвит имя один раз и дальше
+    ходит по игроку, а не по имени — повторная Резолюция могла бы упасть на тёзке."""
     if season is None:
         latest = select(func.max(BoxScore.season)).where(
             BoxScore.player_id == player.id, counted_games()

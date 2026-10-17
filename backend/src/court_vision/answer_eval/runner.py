@@ -32,8 +32,20 @@ log = structlog.get_logger(__name__)
 
 AnswerFn = Callable[[GoldenAnswer], Awaitable[AgentAnswer]]
 
-# Операции, под которыми агент пишет в llm_usage (шаги цикла и эмбеддинг запроса Инструмента).
-_AGENT_OPERATIONS = (loop.OPERATION, "agent.search_corpus")
+# От чьего имени прогон создаёт и ищет Скаутинг-отчёты. Отдельный «пользователь»: отчёты eval
+# не смешиваются с отчётами живых людей и не находятся их поиском.
+EVAL_USER_ID = "eval-runner"
+
+# Операции, под которыми агент пишет в llm_usage: шаги цикла, эмбеддинги запросов Инструментов
+# и генерация отчёта, которую запускает Инструмент `create_scouting_report`.
+_AGENT_OPERATIONS = (
+    loop.OPERATION,
+    "agent.search_corpus",
+    "agent.search_reports",
+    "reports.generate",
+    "reports.generate_retry",
+    "reports.embed",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +83,7 @@ def agent_answer_fn(
                 session_factory,
                 history=history,
                 settings=settings,
+                clerk_user_id=EVAL_USER_ID,
                 # Прогон eval — одна сессия Langfuse: трейсы вопросов собираются вместе.
                 trace_metadata={"session_id": f"eval-{run_id}"},
             )

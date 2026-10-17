@@ -2,6 +2,7 @@ import { AlertTriangle } from 'lucide-react'
 
 import type { ToolCall, ToolResult } from '@/features/chat/model/types'
 import { ComparisonResult } from '@/features/chat/ui/ComparisonResult'
+import { ReportResult } from '@/features/chat/ui/ReportResult'
 import { SeriesResult } from '@/features/chat/ui/SeriesResult'
 import { SimilarResult } from '@/features/chat/ui/SimilarResult'
 import { Collapsible } from '@/shared/ui/Collapsible'
@@ -120,6 +121,10 @@ function ToolResultView({ result }: { result: ToolResult }) {
 
   if (result.kind === 'similar') {
     return <SimilarResult caption={result.caption} items={result.items} />
+  }
+
+  if (result.kind === 'report') {
+    return <ReportResult items={result.items} />
   }
 
   if (result.kind === 'table') {

@@ -124,6 +124,15 @@ litellm — только транспорт: агентный цикл, Инст
 Типы событий описаны моделями в OpenAPI, TS-типы фронтенда генерируются из него. Ошибка
 провайдера приходит событием `error` с телом RFC 9457, а не обрывом соединения.
 
+Скаутинг-отчёты ([ADR-0006](docs/adr/0006-scouting-report-generation.md)): `POST
+/api/v1/reports` (`{player_name, season?, language?}`) отдаёт SSE — `snapshot` с частичным
+отчётом (каждый заменяет предыдущий), затем `done` с `report_id` либо `error`;
+`GET /api/v1/reports` (свои, курсор, `player_id`) и `GET /api/v1/reports/{id}` (чужой — 404).
+Из чата то же делают Инструменты `create_scouting_report` и `search_reports`. Счётчик
+невалидных с первого раза отчётов — доля строк `llm_usage` с операцией
+`reports.generate_retry` среди `reports.generate`, исход каждой попытки — событие
+`reports.validation` в логе.
+
 Трейсы агентного цикла уходят в Langfuse, если заданы `LANGFUSE_PUBLIC_KEY` и
 `LANGFUSE_SECRET_KEY`; без них трейсинг не включается и локальная разработка не требует
 внешнего сервиса. Ходы одного Диалога собираются в Langfuse в одну сессию.

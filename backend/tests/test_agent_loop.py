@@ -54,6 +54,7 @@ from tests.conftest import (
 pytestmark = pytest.mark.usefixtures("seeded_database")
 
 QUESTION = [Turn(role="user", content="Сколько набирал Леброн в 2012-13?")]
+USER = "user_test"
 
 
 @pytest.fixture
@@ -75,7 +76,7 @@ async def answer(
     из них закрывал бы собой предмет проверки.
     """
     async with aclosing(
-        stream_answer(session_factory, history=history, settings=settings)
+        stream_answer(session_factory, history=history, settings=settings, clerk_user_id=USER)
     ) as events:
         async for event in events:
             if isinstance(event, AgentAnswer):
@@ -134,7 +135,9 @@ async def test_цикл_отдаёт_события_по_мере_появлен
 
     events = [
         event
-        async for event in stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+        async for event in stream_answer(
+            session_factory, history=QUESTION, settings=agent_settings, clerk_user_id=USER
+        )
     ]
 
     tool_calls = [event for event in events if isinstance(event, ToolCalled)]
@@ -166,6 +169,8 @@ async def test_инструменты_объявлены_модели(
         "get_player_percentiles",
         "compare_players",
         "find_similar_players",
+        "create_scouting_report",
+        "search_reports",
         "search_corpus",
     ]
     parameters = tools[0]["function"]["parameters"]
@@ -338,7 +343,9 @@ async def test_результат_инструмента_отдаётся_вто
 
     events = [
         event
-        async for event in stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+        async for event in stream_answer(
+            session_factory, history=QUESTION, settings=agent_settings, clerk_user_id=USER
+        )
     ]
 
     called = [event for event in events if isinstance(event, ToolCalled)]
@@ -377,6 +384,7 @@ async def test_отказ_инструмента_виден_в_карточке_
             session_factory,
             history=[Turn(role="user", content="Карри в 2005-06?")],
             settings=agent_settings,
+            clerk_user_id=USER,
         )
     ]
 
@@ -441,10 +449,12 @@ async def test_несуществующий_инструмент_возвращ�
     assert failure["kind"] == "unknown-tool"
     assert failure["available_tools"] == [
         "compare_players",
+        "create_scouting_report",
         "find_similar_players",
         "get_player_percentiles",
         "get_player_stats",
         "search_corpus",
+        "search_reports",
     ]
 
 
@@ -542,7 +552,9 @@ async def test_брошенный_поток_закрывает_поток_пр�
     fake = provider(text_reply("В сезоне 2012-13 Леброн набирал 26.8 очка за игру."))
 
     async with aclosing(
-        stream_answer(session_factory, history=QUESTION, settings=agent_settings)
+        stream_answer(
+            session_factory, history=QUESTION, settings=agent_settings, clerk_user_id=USER
+        )
     ) as events:
         async for event in events:
             if isinstance(event, TokenChunk):
@@ -763,7 +775,10 @@ async def test_search_corpus_отдаёт_карточку_цитат_и_нум�
     events = [
         event
         async for event in stream_answer(
-            session_factory, history=CORPUS_QUESTION, settings=agent_settings
+            session_factory,
+            history=CORPUS_QUESTION,
+            settings=agent_settings,
+            clerk_user_id=USER,
         )
     ]
 
