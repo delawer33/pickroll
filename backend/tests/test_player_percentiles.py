@@ -12,6 +12,7 @@ from datetime import date
 from typing import Any, cast
 
 import pytest
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from court_vision.agent.evidence import BarsView
@@ -261,6 +262,47 @@ async def test_не_считавшаяся_метрика_без_значени�
     # применяется) они есть, и Перцентиль на месте.
     assert by_metric["points"].percentile == 100
     assert result.qualified is True
+
+
+async def test_нулевые_минуты_это_неотслеженные_а_не_ноль(session: AsyncSession) -> None:
+    season = "1955-56"
+    star = Synthetic(201, "Rolf Pettwick", 10, Line(25, 12, 3, 0, 0, 0, 36, 9, 20, 0, 0, 7, 9))
+    untracked = Synthetic(202, "Gunnar Oakley", 10, Line(8, 4, 2, 0, 0, 0, 20, 3, 9, 0, 0, 2, 3))
+    peers = (
+        Synthetic(203, "Edric Vosk", 10, Line(12, 6, 2, 0, 0, 0, 30, 5, 12, 0, 0, 2, 3)),
+        Synthetic(204, "Silas Marrow", 10, Line(14, 5, 4, 0, 0, 0, 32, 6, 13, 0, 0, 2, 2)),
+    )
+    await _insert_season(session, season, (star, untracked, *peers))
+    # У star минуты проставлены в 4 строках из 10 (среднее по ним 36), у untracked — ни в одной.
+    for player_id, tracked in ((201, 4), (202, 0)):
+        games = (
+            await session.scalars(
+                select(BoxScore.game_id)
+                .where(BoxScore.player_id == player_id)
+                .order_by(BoxScore.game_id)
+            )
+        ).all()
+        await session.execute(
+            update(BoxScore)
+            .where(BoxScore.player_id == player_id, BoxScore.game_id.in_(games[tracked:]))
+            .values(minutes=0)
+        )
+    await session.flush()
+
+    result = await get_player_percentiles(session, player_name="Rolf Pettwick", season=season)
+    minutes = next(m for m in result.metrics if m.metric == "minutes")
+    # Сумма минут по 10 строкам дала бы 14.4 < 15 и сняла квалификацию; среднее по
+    # отслеженным — 36.
+    assert result.qualified is True
+    assert result.sample_size == 4
+    assert minutes.value == 36
+
+    absent = await get_player_percentiles(session, player_name="Gunnar Oakley", season=season)
+    absent_minutes = next(m for m in absent.metrics if m.metric == "minutes")
+    # Минут нет вовсе: правило минут не применяется, метрика без значения и Перцентиля.
+    assert absent.qualified is True
+    assert absent_minutes.value is None
+    assert absent_minutes.percentile is None
 
 
 async def test_бросавший_ноль_раз_без_процента(session: AsyncSession) -> None:

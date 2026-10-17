@@ -23,7 +23,10 @@ from court_vision.players.service import counted_games, player_identity, resolve
 from court_vision.rounding import round_half_up
 
 # Квалифицированный игрок (CONTEXT.md): сыграл не меньше половины матчей сезона и, если
-# минуты в ту эпоху считались, не меньше 15 минут за игру.
+# минуты в ту эпоху считались, не меньше 15 минут за игру. Нулевые минуты в строке — «минуты
+# не отслеживались» (1951-52 .. ~1970 датасет заполняет ими часть строк), поэтому минуты за
+# игру — среднее только по строкам с minutes > 0, а игрок без таких строк правилу минут не
+# подчиняется. Решение — в docs/deferred.md.
 MIN_GAMES_SHARE: Final = Decimal("0.5")
 MIN_MINUTES_PER_GAME: Final = 15
 
@@ -116,7 +119,8 @@ def _percentiles_statement(player_id: int, season: str) -> Select[Any]:
         select(
             BoxScore.player_id,
             func.count().label("gp"),
-            func.sum(BoxScore.minutes).label("minutes"),
+            func.sum(BoxScore.minutes).filter(BoxScore.minutes > 0).label("minutes"),
+            func.count().filter(BoxScore.minutes > 0).label("minutes_gp"),
             func.sum(BoxScore.points).label("points"),
             func.sum(BoxScore.rebounds_total).label("rebounds"),
             func.sum(BoxScore.assists).label("assists"),
@@ -162,9 +166,12 @@ def _percentiles_statement(player_id: int, season: str) -> Select[Any]:
         # Нет бросков — нет процента, а не 0%.
         return num(made) / func.nullif(attempted, 0)
 
+    # Минуты за игру — по строкам, где они отслеживались; таких нет — NULL.
+    minutes_per_game = num(t.minutes) / func.nullif(t.minutes_gp, 0)
+
     qualified = (
         (t.gp >= season_games * MIN_GAMES_SHARE)
-        & or_(t.minutes.is_(None), t.minutes >= MIN_MINUTES_PER_GAME * t.gp)
+        & or_(minutes_per_game.is_(None), minutes_per_game >= MIN_MINUTES_PER_GAME)
     ).label("qualified")
 
     lines = select(
@@ -177,7 +184,7 @@ def _percentiles_statement(player_id: int, season: str) -> Select[Any]:
         per_game(t.steals).label("steals"),
         per_game(t.blocks).label("blocks"),
         per_game(t.turnovers).label("turnovers"),
-        per_game(t.minutes).label("minutes"),
+        minutes_per_game.label("minutes"),
         share(t.fgm, t.fga).label("field_goal_percentage"),
         share(t.tpm, t.tpa).label("three_point_percentage"),
         share(t.ftm, t.fta).label("free_throw_percentage"),
